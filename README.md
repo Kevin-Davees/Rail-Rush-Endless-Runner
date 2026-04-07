@@ -8,6 +8,8 @@ This project is part of a **vibe-coding experiment**, and this repository repres
 The game runs entirely in the browser with **no build tools or frameworks required**.
 
 ---
+![game play](assets/game_play.gif)
+---
 
 # 🎮 Gameplay
 
