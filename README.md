@@ -157,7 +157,7 @@ Final.html
 If hosted with GitHub Pages:
 
 ```
-[https://github.com/Kevin-Davees/Rail-Rush-Endless-Runner.git]
+https://github.com/Kevin-Davees/Rail-Rush-Endless-Runner.git
 ```
 
 ---
