@@ -1,0 +1,2215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rail Rush — Endless Runner</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { height: 100%; }
+  body { overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  canvas { display: block; }
+
+  #ui-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  #score-display {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    color: #fff; font-size: 26px; font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    display: flex; gap: 26px; align-items: center;
+  }
+  #score-display .coin-icon { color: #FFD700; }
+  #score-display .dist-icon { color: #00e5ff; }
+
+  #multiplier-bar {
+    position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+    width: 180px; height: 6px; background: rgba(255,255,255,0.15);
+    border-radius: 3px; overflow: hidden;
+  }
+  #multiplier-fill {
+    height: 100%; width: 0%; background: linear-gradient(90deg, #ff6b35, #ffd700);
+    border-radius: 3px; transition: width 0.2s;
+  }
+  #multiplier-text {
+    position: absolute; top: 53px; left: 50%; transform: translateX(-50%);
+    color: #ffd700; font-size: 12px; font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8); width: 180px; text-align: right;
+  }
+
+  #conditions-badge {
+    position: absolute; top: 78px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.65); font-size: 12px; text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    white-space: nowrap;
+  }
+
+  /* Hoverboard indicator */
+  #hoverboard-indicator {
+    position: absolute; top: 18px; left: 18px;
+    min-width: 44px; height: 44px; border-radius: 22px;
+    background: rgba(0,0,0,0.35); border: 2px solid rgba(255,215,0,0.25);
+    display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px;
+    font-size: 18px; opacity: 0.35; transition: all 0.3s;
+  }
+  #hoverboard-indicator.active { opacity: 1; border-color: #ffd700; box-shadow: 0 0 14px rgba(255,215,0,0.6); }
+  #hoverboard-indicator .charge-count { color: #ffd700; font-size: 13px; font-weight: 700; }
+
+  /* Danger meter */
+  #danger-meter { position: absolute; top: 68px; left: 18px; display: flex; gap: 5px; }
+  .danger-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); transition: all 0.2s; }
+  .danger-dot.lit { background: #ff3322; border-color: #ff6644; box-shadow: 0 0 8px rgba(255,50,30,0.8); }
+
+  /* HUD buttons */
+  #hud-buttons { position: absolute; top: 18px; right: 18px; display: flex; gap: 10px; pointer-events: all; }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: none;
+    background: rgba(0,0,0,0.4); color: #fff; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px); transition: background 0.2s;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.6); }
+
+  /* Power-up HUD */
+  #powerup-hud { position: absolute; top: 68px; right: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .powerup-icon { width: 40px; height: 40px; }
+  .pi-ring { width: 40px; height: 40px; border-radius: 50%; padding: 3px; display: flex; align-items: center; justify-content: center; }
+  .pi-inner { width: 100%; height: 100%; border-radius: 50%; background: rgba(10,10,20,0.85); display: flex; align-items: center; justify-content: center; font-size: 15px; color: #fff; }
+
+  /* Mission panel */
+  #mission-panel {
+    position: absolute; bottom: 24px; left: 18px; width: 220px;
+    background: rgba(10,10,25,0.55); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(3px);
+  }
+  .mission-title { color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+  .mission-row { margin-bottom: 7px; }
+  .mission-row:last-child { margin-bottom: 0; }
+  .mission-label { color: #fff; font-size: 12px; margin-bottom: 3px; opacity: 0.9; }
+  .mission-row.mission-complete .mission-label { color: #ffd700; opacity: 1; }
+  .mission-bar { height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; }
+  .mission-bar-fill { height: 100%; background: linear-gradient(90deg, #00e5ff, #ffd700); transition: width 0.2s; }
+  .mission-row.mission-complete .mission-bar-fill { background: #ffd700; }
+
+  /* Toasts */
+  #toast-container { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .toast {
+    color: #fff; font-size: 16px; font-weight: 700; text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+    opacity: 0; transform: translateY(-8px); transition: all 0.25s ease-out; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Flash overlays */
+  #vignette-flash { position: fixed; inset: 0; pointer-events: none; z-index: 50; opacity: 0; background: radial-gradient(circle, transparent 35%, rgba(255,20,20,0.55) 100%); }
+  @keyframes vignetteFlash { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+  #vignette-flash.flash { animation: vignetteFlash 0.5s ease-out; }
+  #lightning-flash { position: fixed; inset: 0; pointer-events: none; z-index: 49; opacity: 0; background: #fff; }
+  @keyframes lightningFlash { 0% { opacity: 0.75; } 15% { opacity: 0.1; } 30% { opacity: 0.55; } 100% { opacity: 0; } }
+  #lightning-flash.flash { animation: lightningFlash 0.55s ease-out; }
+
+  /* Start Screen */
+  #start-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, #0a0a2e 0%, #1a0a3e 50%, #2d1b69 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; pointer-events: all; overflow-y: auto; padding: 24px 0 40px;
+  }
+  #start-screen h1 {
+    font-size: 60px; font-weight: 900;
+    background: linear-gradient(135deg, #00e5ff, #ff6b35, #ffd700);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 4px; animation: titlePulse 2s ease-in-out infinite;
+  }
+  @keyframes titlePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  #start-screen .subtitle { color: rgba(255,255,255,0.6); font-size: 15px; margin-bottom: 20px; letter-spacing: 4px; text-transform: uppercase; }
+
+  .menu-stats { display: flex; gap: 24px; margin-bottom: 22px; flex-wrap: wrap; justify-content: center; }
+  .menu-stats > div { text-align: center; }
+  .menu-stats .stat-label { display: block; color: rgba(255,255,255,0.45); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3px; }
+  .menu-stats .stat-val { color: #fff; font-size: 18px; font-weight: 700; }
+  .menu-stats .stat-val.bank { color: #ffd700; }
+
+  .picker-block { margin-bottom: 20px; text-align: center; width: 100%; max-width: 460px; padding: 0 16px; }
+  .picker-label { color: rgba(255,255,255,0.5); font-size: 11px; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase; }
+  .picker-options { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .picker-card {
+    width: 128px; border-radius: 12px; cursor: pointer; padding: 10px 8px;
+    background: rgba(255,255,255,0.05); border: 2px solid transparent; transition: all 0.2s;
+  }
+  .picker-card.selected { border-color: #fff; background: rgba(255,255,255,0.12); }
+  .picker-swatch { width: 30px; height: 30px; border-radius: 50%; margin: 0 auto 6px; }
+  .picker-name { color: #fff; font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+  .picker-desc { color: rgba(255,255,255,0.5); font-size: 10px; line-height: 1.3; }
+
+  .menu-buttons { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; }
+  .start-btn {
+    padding: 15px 50px; font-size: 19px; font-weight: 700;
+    background: linear-gradient(135deg, #ff6b35, #ff3e00);
+    color: #fff; border: none; border-radius: 50px; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 3px;
+    box-shadow: 0 8px 30px rgba(255,107,53,0.4); transition: all 0.3s; pointer-events: all;
+  }
+  .start-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(255,107,53,0.6); }
+  .shop-btn {
+    padding: 15px 30px; font-size: 15px; font-weight: 700;
+    background: rgba(255,255,255,0.1); color: #fff; border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 50px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+    transition: all 0.3s; pointer-events: all;
+  }
+  .shop-btn:hover { background: rgba(255,255,255,0.18); }
+
+  .controls-info { color: rgba(255,255,255,0.5); font-size: 12px; text-align: center; line-height: 1.8; margin-bottom: 14px; }
+  .controls-info span { color: #00e5ff; font-weight: 600; }
+  .powerup-legend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 460px; padding: 0 16px; }
+  .powerup-legend div { display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.55); font-size: 11px; }
+  .powerup-legend .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Shop screen */
+  #shop-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, #0a0a2e 0%, #1a0a3e 50%, #2d1b69 100%);
+    display: none; flex-direction: column; align-items: center;
+    z-index: 110; pointer-events: all; overflow-y: auto; padding: 30px 16px 40px;
+  }
+  #shop-screen h2 { color: #ffd700; font-size: 34px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+  #shop-bank { color: #fff; font-size: 16px; margin-bottom: 22px; }
+  #shop-bank span { color: #ffd700; font-weight: 700; }
+  #upgrade-list { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 26px; }
+  .upgrade-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;
+  }
+  .upgrade-info .upgrade-name { color: #fff; font-size: 14px; font-weight: 700; }
+  .upgrade-info .upgrade-level { color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 2px; }
+  .upgrade-buy {
+    padding: 9px 16px; font-size: 12px; font-weight: 700; border: none; border-radius: 20px;
+    background: linear-gradient(135deg, #00e5ff, #0091ea); color: #fff; cursor: pointer;
+    white-space: nowrap; transition: all 0.2s; pointer-events: all;
+  }
+  .upgrade-buy:disabled { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.35); cursor: not-allowed; }
+
+  /* Game Over */
+  #game-over {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; pointer-events: all;
+  }
+  #game-over h2 { font-size: 50px; color: #ff3e00; font-weight: 900; margin-bottom: 12px; text-transform: uppercase; }
+  .new-best-banner { color: #ffd700; font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; animation: titlePulse 1s ease-in-out infinite; }
+  #game-over .final-score { font-size: 28px; color: #fff; margin-bottom: 6px; }
+  #game-over .final-coins { font-size: 20px; color: #ffd700; margin-bottom: 6px; }
+  .mission-summary { color: rgba(255,255,255,0.55); font-size: 13px; margin-bottom: 30px; }
+  .restart-btn {
+    padding: 15px 46px; font-size: 19px; font-weight: 700;
+    background: linear-gradient(135deg, #00e5ff, #0091ea); color: #fff; border: none; border-radius: 50px;
+    cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+    box-shadow: 0 8px 30px rgba(0,229,255,0.3); transition: all 0.3s; pointer-events: all;
+  }
+  .restart-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,229,255,0.5); }
+
+  /* Pause screen */
+  #pause-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75);
+    display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; pointer-events: all;
+  }
+  #pause-screen h2 { color: #fff; font-size: 38px; font-weight: 900; margin-bottom: 28px; text-transform: uppercase; letter-spacing: 3px; }
+  #pause-screen .restart-btn { margin-bottom: 14px; }
+  #pause-screen .start-btn { padding: 12px 42px; font-size: 15px; }
+
+  @media (max-width: 480px) {
+    #start-screen h1 { font-size: 42px; }
+    #score-display { font-size: 20px; gap: 18px; }
+    #mission-panel { width: 165px; }
+    .picker-card { width: 104px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="vignette-flash"></div>
+<div id="lightning-flash"></div>
+
+<div id="ui-overlay">
+  <div id="score-display">
+    <div><span class="coin-icon">⬥</span> <span id="coin-count">0</span></div>
+    <div><span class="dist-icon">▸</span> <span id="distance">0</span>m</div>
+  </div>
+  <div id="multiplier-text">x1</div>
+  <div id="multiplier-bar"><div id="multiplier-fill"></div></div>
+  <div id="conditions-badge">☀️</div>
+
+  <div id="hoverboard-indicator"><span>🛹</span><span class="charge-count" id="hoverboard-charges">1</span></div>
+  <div id="danger-meter"><span class="danger-dot"></span><span class="danger-dot"></span><span class="danger-dot"></span></div>
+
+  <div id="hud-buttons">
+    <button class="icon-btn" id="btn-mute" title="Mute">🔊</button>
+    <button class="icon-btn" id="btn-pause" title="Pause">❚❚</button>
+  </div>
+  <div id="powerup-hud"></div>
+
+  <div id="mission-panel">
+    <div class="mission-title">MISSIONS</div>
+    <div id="mission-list"></div>
+  </div>
+
+  <div id="toast-container"></div>
+</div>
+
+<div id="start-screen">
+  <h1>RAIL RUSH</h1>
+  <div class="subtitle">Endless Runner</div>
+
+  <div class="menu-stats">
+    <div><span class="stat-label">Best distance</span><span class="stat-val" id="best-distance-val">0m</span></div>
+    <div><span class="stat-label">Best coins</span><span class="stat-val" id="best-coins-val">0</span></div>
+    <div><span class="stat-label">Bank</span><span class="stat-val bank" id="bank-val">0</span></div>
+  </div>
+
+  <div class="picker-block">
+    <div class="picker-label">Choose your runner</div>
+    <div class="picker-options" id="character-options"></div>
+  </div>
+
+  <div class="picker-block">
+    <div class="picker-label">Choose your board</div>
+    <div class="picker-options" id="hoverboard-options"></div>
+  </div>
+
+  <div class="menu-buttons">
+    <button class="start-btn" id="btn-start">TAP TO RUN</button>
+    <button class="shop-btn" id="btn-shop">Upgrades</button>
+  </div>
+
+  <div class="controls-info">
+    <span>← →</span> or <span>A D</span> — Switch lanes · <span>↑</span> Jump · <span>↓</span> Slide<br>
+    <span>Swipe</span> on mobile · <span>P</span> pause · <span>M</span> mute
+  </div>
+  <div class="powerup-legend">
+    <div><span class="dot" style="background:#ff3366"></span>Jetpack</div>
+    <div><span class="dot" style="background:#33ccff"></span>Magnet</div>
+    <div><span class="dot" style="background:#ffd700"></span>2x Coins</div>
+    <div><span class="dot" style="background:#33ff66"></span>Sneakers</div>
+    <div><span class="dot" style="background:#aaaaaa"></span>Jump train roofs for bonus loot</div>
+  </div>
+</div>
+
+<div id="shop-screen">
+  <h2>Upgrades</h2>
+  <div id="shop-bank">Bank: <span id="shop-bank-val">0</span> coins</div>
+  <div id="upgrade-list"></div>
+  <button class="start-btn" id="btn-shop-close">Back</button>
+</div>
+
+<div id="pause-screen">
+  <h2>Paused</h2>
+  <button class="restart-btn" id="btn-resume">Resume</button>
+  <button class="start-btn" id="btn-quit">Quit to menu</button>
+</div>
+
+<div id="game-over">
+  <h2 id="game-over-title">WASTED</h2>
+  <div class="new-best-banner" id="new-best-banner" style="display:none;">New best distance!</div>
+  <div class="final-score">Distance: <span id="final-dist">0</span>m</div>
+  <div class="final-coins">Coins: <span id="final-coins">0</span></div>
+  <div class="mission-summary" id="mission-summary"></div>
+  <div class="menu-buttons">
+    <button class="restart-btn" id="btn-restart">RUN AGAIN</button>
+    <button class="shop-btn" id="btn-gameover-menu">Menu</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ══════════════════════════════════════════════════════════════
+  // CONSTANTS
+  // ══════════════════════════════════════════════════════════════
+  const LANE_WIDTH = 2.5;
+  const LANES = [-LANE_WIDTH, 0, LANE_WIDTH];
+  const GROUND_SPEED_INITIAL = 18;
+  const GROUND_SPEED_MAX = 48;
+  const SPEED_INCREASE = 0.4;
+  const JUMP_VELOCITY = 14;
+  const GRAVITY = -32;
+  const SLIDE_DURATION = 0.7;
+  const LANE_SWITCH_SPEED = 12;
+  const CHUNK_LENGTH = 80;
+  const VIEW_DISTANCE = 120;
+  const OBSTACLE_INTERVAL_INITIAL = 1.2;
+  const OBSTACLE_INTERVAL_MIN = 0.45;
+  const FLIGHT_HEIGHT = 3.6;
+  const ROOF_Y = 3.0;
+  const MAX_COMBO_LEVEL = 20;
+  const DAY_CYCLE_LENGTH = 150;
+  const POWERUP_DURATION = { magnet: 8, coinx2: 12, sneakers: 9, jetpack: 9 };
+
+  const CHARACTERS = [
+    { name: 'Runner Jake', shirt: 0xff4444, pants: 0x2244aa, cap: 0x2244aa, hair: 0x332211, backpack: 0xffaa00, desc: '+10% speed', speedBonus: 0.10, coinBonus: 0, jumpBonus: 0 },
+    { name: 'Collector Mia', shirt: 0x22aacc, pants: 0x333333, cap: 0xffcc00, hair: 0x111111, backpack: 0xff4477, desc: '+20% coins', speedBonus: 0, coinBonus: 0.20, jumpBonus: 0 },
+    { name: 'Acrobat Theo', shirt: 0x66cc44, pants: 0x553311, cap: 0xff6633, hair: 0x774411, backpack: 0x3355ff, desc: 'Higher jumps', speedBonus: 0, coinBonus: 0, jumpBonus: 0.18 },
+  ];
+
+  const HB_KEYS = ['classic', 'speed', 'magnet', 'coin'];
+  const HOVERBOARD_TYPES = {
+    classic: { name: 'Classic', color: 0x2244aa, desc: 'Balanced', speedBonus: 0, magnetBonus: 0, coinBonus: 0 },
+    speed:   { name: 'Speedster', color: 0xff3333, desc: '+12% speed', speedBonus: 0.12, magnetBonus: 0, coinBonus: 0 },
+    magnet:  { name: 'Magnetizer', color: 0x33ccff, desc: '+3s magnet', speedBonus: 0, magnetBonus: 3, coinBonus: 0 },
+    coin:    { name: 'Golden', color: 0xffd700, desc: '+15% coins', speedBonus: 0, magnetBonus: 0, coinBonus: 0.15 },
+  };
+
+  const UPGRADE_DEFS = {
+    magnet:     { name: 'Magnet Duration', base: 60,  growth: 1.55, max: 5, desc: lvl => '+' + (lvl * 2) + 's magnet' },
+    jetpack:    { name: 'Jetpack Duration', base: 70, growth: 1.55, max: 5, desc: lvl => '+' + (lvl * 1.5) + 's jetpack' },
+    coinBonus:  { name: 'Coin Bonus', base: 80, growth: 1.6, max: 5, desc: lvl => '+' + (lvl * 10) + '% coins' },
+    startCombo: { name: 'Starting Combo', base: 100, growth: 1.7, max: 5, desc: lvl => 'Start at x' + (lvl + 1) },
+    hoverboard: { name: 'Hoverboard Durability', base: 90, growth: 1.6, max: 4, desc: lvl => '+' + Math.floor(lvl / 2) + ' extra charge' },
+  };
+
+  const CYCLE_KEYFRAMES = [
+    { t: 0.00, sky: 0xffaa88, fog: 0xffbb99, fogDensity: 0.014, ambient: 0xaa8877, ambientI: 0.45, sun: 0xffbb88, sunI: 0.9 },
+    { t: 0.20, sky: 0x99ccee, fog: 0x99ccee, fogDensity: 0.011, ambient: 0x8899bb, ambientI: 0.5,  sun: 0xfff4e0, sunI: 1.1 },
+    { t: 0.45, sky: 0x87CEEB, fog: 0x87CEEB, fogDensity: 0.010, ambient: 0x99aacc, ambientI: 0.55, sun: 0xffffff, sunI: 1.3 },
+    { t: 0.65, sky: 0xff9966, fog: 0xffaa77, fogDensity: 0.015, ambient: 0xaa6644, ambientI: 0.45, sun: 0xffaa55, sunI: 1.0 },
+    { t: 0.85, sky: 0x0a1030, fog: 0x0a1030, fogDensity: 0.02,  ambient: 0x223355, ambientI: 0.35, sun: 0x6688cc, sunI: 0.55 },
+    { t: 1.00, sky: 0xffaa88, fog: 0xffbb99, fogDensity: 0.014, ambient: 0xaa8877, ambientI: 0.45, sun: 0xffbb88, sunI: 0.9 },
+  ];
+
+  const MISSION_POOL = [
+    { key: 'coins',    make: () => Math.round(15 + Math.random() * 25), label: t => `Collect ${t} coins`, reward: t => Math.round(t * 1.4) },
+    { key: 'jumps',    make: () => Math.round(6 + Math.random() * 10),  label: t => `Jump ${t} times`, reward: () => 30 },
+    { key: 'slides',   make: () => Math.round(6 + Math.random() * 10),  label: t => `Slide ${t} times`, reward: () => 30 },
+    { key: 'distance', make: () => Math.round(200 + Math.random() * 400), label: t => `Run ${t}m`, reward: () => 45 },
+    { key: 'powerups', make: () => Math.round(1 + Math.random() * 2),   label: t => `Use ${t} power-up${t > 1 ? 's' : ''}`, reward: () => 50 },
+    { key: 'nearmiss', make: () => Math.round(3 + Math.random() * 5),   label: t => `${t} near misses`, reward: () => 40 },
+    { key: 'roof',     make: () => Math.round(1 + Math.random() * 2),   label: t => `Ride ${t} train roof${t > 1 ? 's' : ''}`, reward: () => 45 },
+  ];
+
+  const ZONE_NAMES = { normal: '', station: 'Station', tunnel: 'Tunnel', bridge: 'Bridge', cargo_yard: 'Cargo Yard', construction: 'Construction' };
+  const WEATHER_ICON = { sunny: '☀️', rain: '🌧️', fog: '🌫️', storm: '⛈️' };
+
+  // ══════════════════════════════════════════════════════════════
+  // STATE
+  // ══════════════════════════════════════════════════════════════
+  let gameState = 'menu'; // menu, playing, paused, dead
+  let coins = 0, distance = 0, speed = GROUND_SPEED_INITIAL;
+  let currentLane = 1, targetX = 0, playerY = 0, playerVelY = 0;
+  let isJumping = false, isSliding = false, isFlying = false, isOnTrain = false;
+  let currentTrainObs = null;
+  let slideTimer = 0, flightTimer = 0;
+  let invincibleTimer = 0;
+  let lastTime = 0;
+  let shakeIntensity = 0;
+  let tumbleTimer = 0, tumbleAngVel = { x: 0, z: 0 };
+  let jumpsThisRun = 0, slidesThisRun = 0, powerupsThisRun = 0, coinsThisRun = 0, nearMissThisRun = 0, roofRidesThisRun = 0;
+  let powerupTimers = { magnet: 0, coinx2: 0, sneakers: 0 };
+  let effectiveDuration = { magnet: POWERUP_DURATION.magnet, coinx2: POWERUP_DURATION.coinx2, sneakers: POWERUP_DURATION.sneakers, jetpack: POWERUP_DURATION.jetpack };
+  let missions = [];
+  let bestDistance = 0, bestCoins = 0, totalCoinsAllTime = 0, bank = 0;
+  let upgrades = { magnet: 0, jetpack: 0, coinBonus: 0, startCombo: 0, hoverboard: 0 };
+  let muted = false;
+  let audioCtx = null, masterGain = null, wetGain = null, delayNode = null, feedbackGain = null;
+  let selectedCharacter = 0, selectedHoverboard = 0;
+  let elapsedTime = 0;
+  let jetpackParticleTimer = 0;
+  let comboPoints = 0, comboLevel = 1, comboIdleTimer = 0;
+  let hoverboardCharges = 1;
+  let mistakeCount = 0, inspectorState = 'normal', inspectorDistance = 14, inspectorTargetDistance = 14;
+  let activeCoinMult = 1, runSpeedMult = 1, activeJumpVelocity = JUMP_VELOCITY, activeMagnetBonus = 0;
+  let cameraZoomTimer = 0, landingSquashTimer = 0;
+  let timeScale = 1;
+  let currentWeather = 'sunny', weatherTimer = 10, lightningTimer = 5;
+  let currentZone = 'normal', zoneDistanceRemaining = 0;
+  let cycleTime = 0;
+
+  // ══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ══════════════════════════════════════════════════════════════
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem('railrush_progress_v3');
+      if (raw) {
+        const s = JSON.parse(raw);
+        bestDistance = s.bestDistance || 0;
+        bestCoins = s.bestCoins || 0;
+        totalCoinsAllTime = s.totalCoinsAllTime || 0;
+        bank = s.bank || 0;
+        if (s.upgrades) upgrades = Object.assign(upgrades, s.upgrades);
+      }
+    } catch (e) { /* storage unavailable */ }
+    updateMenuStats();
+  }
+  function saveProgress() {
+    try {
+      localStorage.setItem('railrush_progress_v3', JSON.stringify({ bestDistance, bestCoins, totalCoinsAllTime, bank, upgrades }));
+    } catch (e) { /* storage unavailable */ }
+  }
+  function updateMenuStats() {
+    document.getElementById('best-distance-val').textContent = bestDistance + 'm';
+    document.getElementById('best-coins-val').textContent = bestCoins;
+    document.getElementById('bank-val').textContent = bank;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // AUDIO (with a simple delay bus used for the tunnel echo effect)
+  // ══════════════════════════════════════════════════════════════
+  function initAudio() {
+    if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain(); masterGain.gain.value = 1;
+      const dryGain = audioCtx.createGain(); dryGain.gain.value = 1;
+      wetGain = audioCtx.createGain(); wetGain.gain.value = 0;
+      delayNode = audioCtx.createDelay(); delayNode.delayTime.value = 0.18;
+      feedbackGain = audioCtx.createGain(); feedbackGain.gain.value = 0.35;
+      masterGain.connect(dryGain); dryGain.connect(audioCtx.destination);
+      masterGain.connect(delayNode); delayNode.connect(feedbackGain); feedbackGain.connect(delayNode);
+      delayNode.connect(wetGain); wetGain.connect(audioCtx.destination);
+    } catch (e) { audioCtx = null; }
+  }
+  function setTunnelEcho(active) {
+    if (!wetGain || !audioCtx) return;
+    wetGain.gain.setTargetAtTime(active ? 0.45 : 0, audioCtx.currentTime, 0.3);
+  }
+  function tone(freq, dur, type, vol, delay) {
+    if (!audioCtx || muted) return;
+    type = type || 'sine'; vol = vol == null ? 0.18 : vol; delay = delay || 0;
+    const t0 = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain); gain.connect(masterGain);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+  function sweep(f1, f2, dur, type, vol) {
+    if (!audioCtx || muted) return;
+    type = type || 'sine'; vol = vol == null ? 0.18 : vol;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f1, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t0 + dur);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain); gain.connect(masterGain);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+  function noiseBurst(dur, vol) {
+    if (!audioCtx || muted) return;
+    vol = vol == null ? 0.25 : vol;
+    const bufferSize = Math.floor(audioCtx.sampleRate * dur);
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    src.connect(gain); gain.connect(masterGain);
+    src.start();
+  }
+  function playCoinSound() { tone(1500, 0.07, 'sine', 0.13); }
+  function playJumpSound() { sweep(320, 720, 0.16, 'triangle', 0.11); }
+  function playLandSound() { noiseBurst(0.06, 0.06); }
+  function playSlideSound() { sweep(500, 220, 0.18, 'sawtooth', 0.07); }
+  function playCrashSound() { noiseBurst(0.4, 0.32); sweep(220, 40, 0.4, 'sawtooth', 0.18); }
+  function playPowerupSound() { tone(600, 0.09, 'square', 0.13, 0); tone(900, 0.09, 'square', 0.13, 0.08); tone(1300, 0.11, 'square', 0.13, 0.16); }
+  function playShieldSound() { tone(200, 0.14, 'sawtooth', 0.18); sweep(150, 620, 0.28, 'sine', 0.13); }
+  function playMultiplierSound() { tone(880, 0.1, 'sine', 0.14); tone(1320, 0.13, 'sine', 0.14, 0.09); }
+  function playChimeSound() { tone(1046, 0.14, 'sine', 0.14); tone(1318, 0.17, 'sine', 0.14, 0.11); }
+  function playSmashSound() { noiseBurst(0.14, 0.18); tone(150, 0.09, 'square', 0.14); }
+  function playNearMissSound() { sweep(400, 1000, 0.12, 'triangle', 0.1); }
+  function playStumbleSound() { sweep(300, 120, 0.25, 'sawtooth', 0.16); }
+  function playThunderSound() { noiseBurst(0.5, 0.2); sweep(90, 30, 0.6, 'sine', 0.15); }
+
+  // ══════════════════════════════════════════════════════════════
+  // THREE.JS SETUP + LIGHTING
+  // ══════════════════════════════════════════════════════════════
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.FogExp2(0x87CEEB, 0.012);
+
+  const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 300);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  document.body.appendChild(renderer.domElement);
+
+  const ambientLight = new THREE.AmbientLight(0x8899bb, 0.5);
+  scene.add(ambientLight);
+  const sunLight = new THREE.DirectionalLight(0xfff4e0, 1.2);
+  sunLight.position.set(30, 50, 30);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  sunLight.shadow.camera.left = -40; sunLight.shadow.camera.right = 40;
+  sunLight.shadow.camera.top = 40; sunLight.shadow.camera.bottom = -40;
+  sunLight.shadow.camera.near = 1; sunLight.shadow.camera.far = 120;
+  scene.add(sunLight); scene.add(sunLight.target);
+  const fillLight = new THREE.DirectionalLight(0x6688cc, 0.3);
+  fillLight.position.set(-20, 20, -10);
+  scene.add(fillLight);
+
+  function applyCycleAndWeather() {
+    const frac = (cycleTime % DAY_CYCLE_LENGTH) / DAY_CYCLE_LENGTH;
+    let k0 = CYCLE_KEYFRAMES[0], k1 = CYCLE_KEYFRAMES[CYCLE_KEYFRAMES.length - 1];
+    for (let i = 0; i < CYCLE_KEYFRAMES.length - 1; i++) {
+      if (frac >= CYCLE_KEYFRAMES[i].t && frac <= CYCLE_KEYFRAMES[i + 1].t) { k0 = CYCLE_KEYFRAMES[i]; k1 = CYCLE_KEYFRAMES[i + 1]; break; }
+    }
+    const span = (k1.t - k0.t) || 1;
+    const lt = (frac - k0.t) / span;
+    const sky = new THREE.Color(k0.sky).lerp(new THREE.Color(k1.sky), lt);
+    const fog = new THREE.Color(k0.fog).lerp(new THREE.Color(k1.fog), lt);
+    const amb = new THREE.Color(k0.ambient).lerp(new THREE.Color(k1.ambient), lt);
+    const sun = new THREE.Color(k0.sun).lerp(new THREE.Color(k1.sun), lt);
+    const fogDensity = THREE.MathUtils.lerp(k0.fogDensity, k1.fogDensity, lt);
+    const ambientI = THREE.MathUtils.lerp(k0.ambientI, k1.ambientI, lt);
+    const sunI = THREE.MathUtils.lerp(k0.sunI, k1.sunI, lt);
+
+    let fogMult = 1, dimMult = 1;
+    if (currentWeather === 'fog') fogMult = 2.4;
+    else if (currentWeather === 'storm') { fogMult = 1.6; dimMult = 0.72; }
+    else if (currentWeather === 'rain') { fogMult = 1.3; dimMult = 0.86; }
+    if (currentZone === 'tunnel') { dimMult *= 0.45; fogMult *= 0.6; }
+
+    scene.background = sky;
+    scene.fog.color.copy(fog);
+    scene.fog.density = fogDensity * fogMult;
+    ambientLight.color.copy(amb);
+    ambientLight.intensity = ambientI * dimMult;
+    sunLight.color.copy(sun);
+    sunLight.intensity = sunI * dimMult;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MATERIALS
+  // ══════════════════════════════════════════════════════════════
+  const matGround = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
+  const matRail = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.3 });
+  const matSleeper = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.85 });
+  const matGravel = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 1.0 });
+  const matTrain = [
+    new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.4, metalness: 0.3 }),
+    new THREE.MeshStandardMaterial({ color: 0x2266cc, roughness: 0.4, metalness: 0.3 }),
+    new THREE.MeshStandardMaterial({ color: 0x22aa44, roughness: 0.4, metalness: 0.3 }),
+    new THREE.MeshStandardMaterial({ color: 0xddaa00, roughness: 0.4, metalness: 0.3 }),
+    new THREE.MeshStandardMaterial({ color: 0x8833aa, roughness: 0.4, metalness: 0.3 }),
+  ];
+  const matBarrier = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.6 });
+  const matRamp = new THREE.MeshStandardMaterial({ color: 0xffcc33, roughness: 0.5, metalness: 0.2 });
+  const matCoin = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.1, emissive: 0xffaa00, emissiveIntensity: 0.3 });
+  const matBuilding = () => new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0, 0, 0.25 + Math.random() * 0.35), roughness: 0.85 });
+  const matWindow = new THREE.MeshStandardMaterial({ color: 0xaaddff, emissive: 0x334466, emissiveIntensity: 0.2, metalness: 0.5, roughness: 0.2 });
+  const matConcrete = new THREE.MeshStandardMaterial({ color: 0x777770, roughness: 0.9 });
+  const matCaution = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.6 });
+  const coinGeom = new THREE.TorusGeometry(0.2, 0.06, 8, 16);
+  const POWERUP_TYPES = [
+    { key: 'jetpack', color: 0xff3366, icon: '🚀' },
+    { key: 'magnet', color: 0x33ccff, icon: '🧲' },
+    { key: 'coinx2', color: 0xffd700, icon: '×2' },
+    { key: 'sneakers', color: 0x33ff66, icon: '👟' },
+  ];
+
+  const matPlayer = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.5 });
+  const matPlayerSkin = new THREE.MeshStandardMaterial({ color: 0xffcc99, roughness: 0.7 });
+  const matPlayerHair = new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 0.8 });
+  const matPlayerShoes = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  const matPlayerPants = new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.6 });
+  const matCap = new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.6 });
+  const matBackpack = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.7 });
+  const matJetpack = new THREE.MeshStandardMaterial({ color: 0x888899, metalness: 0.6, roughness: 0.3 });
+  const matFlame = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+  const matHoverboard = new THREE.MeshStandardMaterial({ color: 0x2244aa, emissive: 0x2244aa, emissiveIntensity: 0.4, roughness: 0.4 });
+
+  function applyCharacter(idx) {
+    const c = CHARACTERS[idx];
+    matPlayer.color.setHex(c.shirt);
+    matPlayerPants.color.setHex(c.pants);
+    matCap.color.setHex(c.cap);
+    matPlayerHair.color.setHex(c.hair);
+    matBackpack.color.setHex(c.backpack);
+  }
+  function applyHoverboardVisual(idx) {
+    const h = HOVERBOARD_TYPES[HB_KEYS[idx]];
+    matHoverboard.color.setHex(h.color);
+    matHoverboard.emissive.setHex(h.color);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // PLAYER CHARACTER
+  // ══════════════════════════════════════════════════════════════
+  const player = new THREE.Group();
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.35), matPlayer);
+  torso.position.y = 1.15; torso.castShadow = true; player.add(torso);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), matPlayerSkin);
+  head.position.y = 1.75; head.castShadow = true; player.add(head);
+
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), matPlayerHair);
+  hair.position.y = 1.78; player.add(hair);
+
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.08, 12), matCap);
+  cap.position.y = 1.92; player.add(cap);
+  const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.03, 0.32), matCap);
+  capBrim.position.set(0, 1.9, -0.2); player.add(capBrim);
+
+  const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.48, 0.2), matBackpack);
+  backpack.position.set(0, 1.15, 0.26); backpack.castShadow = true; player.add(backpack);
+  const strapGeo = new THREE.BoxGeometry(0.06, 0.5, 0.05);
+  const strapL = new THREE.Mesh(strapGeo, matBackpack); strapL.position.set(-0.18, 1.25, 0.05); player.add(strapL);
+  const strapR = new THREE.Mesh(strapGeo, matBackpack); strapR.position.set(0.18, 1.25, 0.05); player.add(strapR);
+
+  function createLimb(pivotY, xOffset, isArm) {
+    const pivot = new THREE.Group();
+    pivot.position.set(xOffset, pivotY, 0);
+    player.add(pivot);
+    const upperLen = isArm ? 0.3 : 0.34;
+    const upperMat = isArm ? matPlayerSkin : matPlayerPants;
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.14, upperLen, 0.14), upperMat);
+    upper.position.y = -upperLen / 2; upper.castShadow = true; pivot.add(upper);
+    const knee = new THREE.Group();
+    knee.position.y = -upperLen; pivot.add(knee);
+    const lowerLen = isArm ? 0.26 : 0.32;
+    const lowerMat = isArm ? matPlayerSkin : matPlayerPants;
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(0.13, lowerLen, 0.13), lowerMat);
+    lower.position.y = -lowerLen / 2; lower.castShadow = true; knee.add(lower);
+    if (!isArm) {
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.28), matPlayerShoes);
+      foot.position.set(0, -lowerLen, 0.05); foot.castShadow = true; knee.add(foot);
+    } else {
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), matPlayerSkin);
+      hand.position.y = -lowerLen; knee.add(hand);
+    }
+    return { pivot, knee };
+  }
+  const leftArm = createLimb(1.42, -0.36, true);
+  const rightArm = createLimb(1.42, 0.36, true);
+  const leftLeg = createLimb(0.85, -0.15, false);
+  const rightLeg = createLimb(0.85, 0.15, false);
+
+  const jetpackGroup = new THREE.Group();
+  const tankGeo = new THREE.CylinderGeometry(0.09, 0.1, 0.5, 8);
+  const tankL = new THREE.Mesh(tankGeo, matJetpack); tankL.position.set(-0.13, 1.2, 0.32); tankL.rotation.x = 0.08; jetpackGroup.add(tankL);
+  const tankR = new THREE.Mesh(tankGeo, matJetpack); tankR.position.set(0.13, 1.2, 0.32); tankR.rotation.x = 0.08; jetpackGroup.add(tankR);
+  const flameL = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 6), matFlame); flameL.position.set(-0.13, 0.9, 0.34); flameL.rotation.x = Math.PI; jetpackGroup.add(flameL);
+  const flameR = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 6), matFlame); flameR.position.set(0.13, 0.9, 0.34); flameR.rotation.x = Math.PI; jetpackGroup.add(flameR);
+  jetpackGroup.visible = false;
+  player.add(jetpackGroup);
+
+  const hoverboardMesh = new THREE.Group();
+  const boardDeck = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.9), matHoverboard);
+  boardDeck.position.y = -0.05;
+  hoverboardMesh.add(boardDeck);
+  const boardGlow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.8), new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6 }));
+  boardGlow.position.y = -0.09;
+  hoverboardMesh.add(boardGlow);
+  hoverboardMesh.position.y = 0.08;
+  player.add(hoverboardMesh);
+
+  player.position.set(0, 0, 0);
+  scene.add(player);
+
+  function buildSimpleFigure(shirtColor, skinColor, hatColor) {
+    skinColor = skinColor || 0xffcc99; hatColor = hatColor || 0x222222;
+    const g = new THREE.Group();
+    const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 });
+    const tors = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.65, 0.32), shirtMat);
+    tors.position.y = 1.1; tors.castShadow = true; g.add(tors);
+    const hd = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 }));
+    hd.position.y = 1.65; g.add(hd);
+    const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.12, 10), new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.6 }));
+    hat.position.y = 1.82; g.add(hat);
+    const legGeo = new THREE.BoxGeometry(0.18, 0.5, 0.18);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x222233, roughness: 0.7 });
+    const legL = new THREE.Mesh(legGeo, legMat); legL.position.set(-0.14, 0.45, 0); g.add(legL);
+    const legR = new THREE.Mesh(legGeo, legMat); legR.position.set(0.14, 0.45, 0); g.add(legR);
+    const armGeo = new THREE.BoxGeometry(0.14, 0.5, 0.14);
+    const armL = new THREE.Mesh(armGeo, shirtMat); armL.position.set(-0.36, 1.1, 0); g.add(armL);
+    const armR = new THREE.Mesh(armGeo, shirtMat); armR.position.set(0.36, 1.1, 0); g.add(armR);
+    g.userData.legL = legL; g.userData.legR = legR; g.userData.armL = armL; g.userData.armR = armR;
+    return g;
+  }
+
+  const inspectorMesh = buildSimpleFigure(0x334455, 0xffcc99, 0x111111);
+  inspectorMesh.visible = false;
+  scene.add(inspectorMesh);
+
+  function buildDog() {
+    const g = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x553322, roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.6), bodyMat);
+    body.position.y = 0.35; g.add(body);
+    const hd = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 0.22), bodyMat);
+    hd.position.set(0, 0.42, -0.38); g.add(hd);
+    const legGeo = new THREE.BoxGeometry(0.08, 0.3, 0.08);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x442211, roughness: 0.8 });
+    const positions = [[-0.1, 0.15, 0.22], [0.1, 0.15, 0.22], [-0.1, 0.15, -0.22], [0.1, 0.15, -0.22]];
+    const legs = positions.map(p => { const l = new THREE.Mesh(legGeo, legMat); l.position.set(p[0], p[1], p[2]); g.add(l); return l; });
+    g.userData.legs = legs;
+    return g;
+  }
+  const dogMesh = buildDog();
+  dogMesh.visible = false;
+  scene.add(dogMesh);
+
+  function buildNPC(kind) {
+    if (kind === 'worker') return buildSimpleFigure(0xff8800, 0xffcc99, 0xffdd00);
+    return buildSimpleFigure(0x778899, 0xffcc99, 0x553322);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // GROUND CHUNKS + ZONES
+  // ══════════════════════════════════════════════════════════════
+  const groundChunks = [];
+
+  function createTrackRails(chunkGroup) {
+    for (let lane = 0; lane < 3; lane++) {
+      const laneX = LANES[lane];
+      const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, CHUNK_LENGTH), matRail);
+      r1.position.set(laneX - 0.5, 0.08, 0); r1.receiveShadow = true; chunkGroup.add(r1);
+      const r2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, CHUNK_LENGTH), matRail);
+      r2.position.set(laneX + 0.5, 0.08, 0); r2.receiveShadow = true; chunkGroup.add(r2);
+      for (let s = -CHUNK_LENGTH / 2 + 0.5; s < CHUNK_LENGTH / 2; s += 1.2) {
+        const sleeper = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.06, 0.18), matSleeper);
+        sleeper.position.set(laneX, 0.02, s); sleeper.receiveShadow = true; chunkGroup.add(sleeper);
+      }
+    }
+    const g1 = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.03, CHUNK_LENGTH), matGravel);
+    g1.position.set((LANES[0] + LANES[1]) / 2, 0.01, 0); g1.receiveShadow = true; chunkGroup.add(g1);
+    const g2 = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.03, CHUNK_LENGTH), matGravel);
+    g2.position.set((LANES[1] + LANES[2]) / 2, 0.01, 0); g2.receiveShadow = true; chunkGroup.add(g2);
+  }
+
+  function createBuildings(chunkGroup, side) {
+    const xBase = side * 8;
+    for (let z = -CHUNK_LENGTH / 2; z < CHUNK_LENGTH / 2; z += 5 + Math.random() * 6) {
+      const w = 3 + Math.random() * 4, h = 4 + Math.random() * 18, d = 3 + Math.random() * 4;
+      const building = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matBuilding());
+      building.position.set(xBase + side * (Math.random() * 4), h / 2, z);
+      building.castShadow = true; building.receiveShadow = true;
+      chunkGroup.add(building);
+      const winRows = Math.floor(h / 1.8), winCols = Math.floor(w / 1.2);
+      for (let wr = 0; wr < winRows; wr++) {
+        for (let wc = 0; wc < winCols; wc++) {
+          if (Math.random() < 0.3) continue;
+          const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), matWindow);
+          win.position.set(building.position.x - w / 2 + 0.8 + wc * 1.1, 1 + wr * 1.6, building.position.z + (side < 0 ? d / 2 + 0.01 : -d / 2 - 0.01));
+          if (side > 0) win.rotation.y = Math.PI;
+          chunkGroup.add(win);
+        }
+      }
+      if (Math.random() < 0.15) {
+        const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 1.2, 8), matBuilding());
+        tower.position.set(building.position.x, h + 0.6, building.position.z);
+        chunkGroup.add(tower);
+      }
+      if (Math.random() < 0.2) {
+        const billboard = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.3), new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(Math.random(), 0.6, 0.5), emissive: 0x222222, emissiveIntensity: 0.3 }));
+        billboard.position.set(xBase + side * 3.2, 6 + Math.random() * 5, z);
+        billboard.rotation.y = side > 0 ? Math.PI : 0;
+        chunkGroup.add(billboard);
+      }
+    }
+  }
+
+  function createTunnelDecor(chunkGroup) {
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, CHUNK_LENGTH), matConcrete);
+      wall.position.set(side * 5.2, 3, 0); wall.receiveShadow = true; chunkGroup.add(wall);
+    }
+    const ceiling = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.4, CHUNK_LENGTH), matConcrete);
+    ceiling.position.set(0, 6.2, 0); chunkGroup.add(ceiling);
+    for (let z = -CHUNK_LENGTH / 2 + 6; z < CHUNK_LENGTH / 2; z += 12) {
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffee99 }));
+      lamp.position.set(0, 5.8, z); chunkGroup.add(lamp);
+      const spark = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color: 0xffaa33 }));
+      spark.position.set((Math.random() < 0.5 ? -4.8 : 4.8), 0.3 + Math.random() * 0.5, z + Math.random() * 6);
+      chunkGroup.add(spark);
+    }
+  }
+
+  function createBridgeDecor(chunkGroup) {
+    for (const side of [-1, 1]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, CHUNK_LENGTH), matRail);
+      rail.position.set(side * 5, 0.9, 0); chunkGroup.add(rail);
+      for (let z = -CHUNK_LENGTH / 2; z < CHUNK_LENGTH / 2; z += 20) {
+        const arch = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5, 0.3), matRail);
+        arch.position.set(side * 5, 2.5, z); chunkGroup.add(arch);
+      }
+    }
+    for (let z = -CHUNK_LENGTH / 2 + 10; z < CHUNK_LENGTH / 2; z += 20) {
+      const truss = new THREE.Mesh(new THREE.BoxGeometry(10, 0.3, 0.3), matRail);
+      truss.position.set(0, 5.6, z); chunkGroup.add(truss);
+    }
+  }
+
+  function createStationDecor(chunkGroup) {
+    const side = 1;
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, CHUNK_LENGTH * 0.9), matConcrete);
+    platform.position.set(side * 5.5, 0.3, 0); platform.receiveShadow = true; chunkGroup.add(platform);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.62, CHUNK_LENGTH * 0.9), matCaution);
+    edge.position.set(side * 4.05, 0.3, 0); chunkGroup.add(edge);
+    for (let z = -CHUNK_LENGTH / 2 + 10; z < CHUNK_LENGTH / 2; z += 16) {
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 0.4), new THREE.MeshStandardMaterial({ color: 0x774422, roughness: 0.7 }));
+      bench.position.set(side * 6.4, 0.8, z); chunkGroup.add(bench);
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), new THREE.MeshStandardMaterial({ color: 0x2244aa, emissive: 0x112244, emissiveIntensity: 0.3 }));
+      sign.position.set(side * 7, 3, z + 6); sign.rotation.y = Math.PI / 2; chunkGroup.add(sign);
+      if (Math.random() < 0.6) {
+        const npc = buildNPC('passenger');
+        npc.position.set(side * 6 + (Math.random() - 0.5), 0.6, z + (Math.random() - 0.5) * 4);
+        chunkGroup.add(npc);
+      }
+    }
+  }
+
+  function createCargoDecor(chunkGroup) {
+    const colors = [0xcc3333, 0x3366cc, 0x33aa55, 0xddaa00];
+    for (const side of [-1, 1]) {
+      for (let z = -CHUNK_LENGTH / 2 + 6; z < CHUNK_LENGTH / 2; z += 14) {
+        if (Math.random() < 0.5) continue;
+        const stackH = 1 + Math.floor(Math.random() * 2);
+        for (let s = 0; s < stackH; s++) {
+          const container = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 5.8), new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random() * colors.length)], roughness: 0.6 }));
+          container.position.set(side * 9, 1.1 + s * 2.25, z);
+          container.castShadow = true;
+          chunkGroup.add(container);
+        }
+      }
+    }
+  }
+
+  function createConstructionDecor(chunkGroup) {
+    for (const side of [-1, 1]) {
+      for (let z = -CHUNK_LENGTH / 2 + 8; z < CHUNK_LENGTH / 2; z += 18) {
+        if (Math.random() < 0.4) continue;
+        const scaffold = new THREE.Group();
+        for (let sx = 0; sx < 2; sx++) {
+          for (let sy = 0; sy < 3; sy++) {
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 6), matRail);
+            pole.position.set(sx * 1.4, sy * 2 + 1, 0);
+            scaffold.add(pole);
+          }
+        }
+        scaffold.position.set(side * 8, 0, z);
+        chunkGroup.add(scaffold);
+        if (Math.random() < 0.5) {
+          const npc = buildNPC('worker');
+          npc.position.set(side * 6.5, 0, z + 1);
+          chunkGroup.add(npc);
+        }
+      }
+    }
+  }
+
+  function pickZoneIfNeeded() {
+    if (zoneDistanceRemaining <= 0) {
+      const zones = ['normal', 'normal', 'normal', 'station', 'tunnel', 'bridge', 'cargo_yard', 'construction'];
+      currentZone = zones[Math.floor(Math.random() * zones.length)];
+      zoneDistanceRemaining = 110 + Math.random() * 190;
+      setTunnelEcho(currentZone === 'tunnel');
+      updateConditionsBadge();
+    }
+    zoneDistanceRemaining -= CHUNK_LENGTH;
+  }
+
+  function createGroundChunk(zPos) {
+    pickZoneIfNeeded();
+    const zone = currentZone;
+    const group = new THREE.Group();
+
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, CHUNK_LENGTH), matGround);
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; group.add(ground);
+    createTrackRails(group);
+
+    if (zone === 'tunnel') {
+      createTunnelDecor(group);
+    } else if (zone === 'bridge') {
+      createBridgeDecor(group);
+    } else if (zone === 'station') {
+      createBuildings(group, -1); createStationDecor(group);
+    } else if (zone === 'cargo_yard') {
+      createBuildings(group, -1); createCargoDecor(group);
+    } else if (zone === 'construction') {
+      createBuildings(group, -1); createConstructionDecor(group);
+    } else {
+      createBuildings(group, -1); createBuildings(group, 1);
+    }
+
+    if (zone !== 'tunnel') {
+      for (let lane = 0; lane < 3; lane++) {
+        if (Math.random() < 0.4) {
+          const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, CHUNK_LENGTH, 4), matRail);
+          wire.rotation.x = Math.PI / 2; wire.position.set(LANES[lane], 4.5, 0); group.add(wire);
+          for (let pz = -CHUNK_LENGTH / 2 + 5; pz < CHUNK_LENGTH / 2; pz += 20) {
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 5, 6), matRail);
+            pole.position.set(LANES[lane] + (Math.random() < 0.5 ? -0.8 : 0.8), 2.5, pz);
+            group.add(pole);
+          }
+        }
+      }
+    }
+
+    group.position.z = zPos;
+    scene.add(group);
+    groundChunks.push({ group, zone });
+    return group;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // OBSTACLES
+  // ══════════════════════════════════════════════════════════════
+  const obstacles = [];
+
+  function pickTrainKind() {
+    const r = Math.random();
+    if (r < 0.55) return 'parked';
+    if (r < 0.78) return 'slow';
+    if (r < 0.94) return 'express';
+    return 'oncoming';
+  }
+  function trainSpeedMultiplier(kind) {
+    if (kind === 'slow') return 0.55;
+    if (kind === 'express') return 1.6;
+    if (kind === 'oncoming') return 2.1;
+    return 1.0;
+  }
+
+  function createTrain(lane, zPos) {
+    const group = new THREE.Group();
+    const color = matTrain[Math.floor(Math.random() * matTrain.length)];
+    const length = 6 + Math.random() * 10;
+    const carCount = Math.floor(length / 4);
+    const kind = pickTrainKind();
+    const speedMult = trainSpeedMultiplier(kind);
+    const roofHazards = [];
+    const roofPickups = [];
+
+    for (let c = 0; c < carCount; c++) {
+      const car = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.8, 3.5), color);
+      car.position.set(0, 1.6, -c * 3.8); car.castShadow = true; group.add(car);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 3.6), matRail);
+      roof.position.set(0, 3.05, -c * 3.8); group.add(roof);
+      const winStripe = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.6, 3.2), new THREE.MeshStandardMaterial({ color: 0xaaddff, metalness: 0.6, roughness: 0.1 }));
+      winStripe.position.set(0, 2.0, -c * 3.8); group.add(winStripe);
+
+      if (kind === 'express' || kind === 'oncoming') {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.15, 3.6), new THREE.MeshStandardMaterial({ color: kind === 'oncoming' ? 0xff2222 : 0xffee00, emissive: kind === 'oncoming' ? 0x881111 : 0x887700, emissiveIntensity: 0.5 }));
+        stripe.position.set(0, 2.9, -c * 3.8); group.add(stripe);
+      }
+      if (carCount > 1 && c > 0 && Math.random() < 0.45) {
+        const vent = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 }));
+        vent.position.set((Math.random() < 0.5 ? -0.4 : 0.4), 3.25, -c * 3.8);
+        group.add(vent);
+        roofHazards.push({ localZ: -c * 3.8, hit: false });
+      }
+    }
+
+    if (carCount >= 2 && Math.random() < 0.5) {
+      const pickCount = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < pickCount; i++) {
+        const lz = -(0.5 + i * 1.6);
+        const rc = new THREE.Mesh(coinGeom, matCoin);
+        rc.position.set(0, 3.35, lz); rc.rotation.x = Math.PI / 2;
+        group.add(rc);
+        roofPickups.push({ mesh: rc, localZ: lz, kind: 'coin', collected: false });
+      }
+      if (Math.random() < 0.3) {
+        const pType = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+        const pmesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), new THREE.MeshStandardMaterial({ color: pType.color, emissive: pType.color, emissiveIntensity: 0.6 }));
+        const lz = -(length * 0.5);
+        pmesh.position.set(0, 3.5, lz);
+        group.add(pmesh);
+        roofPickups.push({ mesh: pmesh, localZ: lz, kind: pType.key, collected: false });
+      }
+    }
+
+    group.position.set(LANES[lane], 0, zPos);
+    scene.add(group);
+    obstacles.push({ group, lane, type: 'train', length, kind, speedMult, roofHazards, roofPickups, nearMissDone: false });
+  }
+
+  function createBarrier(lane, zPos) {
+    const group = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 0.3), matBarrier);
+    bar.position.y = 0.5; bar.castShadow = true; group.add(bar);
+    const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6), matRail);
+    post1.position.set(-0.8, 0.5, 0); group.add(post1);
+    const post2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6), matRail);
+    post2.position.set(0.8, 0.5, 0); group.add(post2);
+    group.position.set(LANES[lane], 0, zPos);
+    scene.add(group);
+    obstacles.push({ group, lane, type: 'low_barrier', length: 0.4, nearMissDone: false });
+  }
+
+  function createHighBarrier(lane, zPos) {
+    const group = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.0, 1.0), new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.7 }));
+    box.position.y = 1.5; box.castShadow = true; group.add(box);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.15, 1.02), new THREE.MeshStandardMaterial({ color: 0xffcc00 }));
+    stripe.position.y = 2.2; group.add(stripe);
+    group.position.set(LANES[lane], 0, zPos);
+    scene.add(group);
+    obstacles.push({ group, lane, type: 'high_barrier', length: 1.0, nearMissDone: false });
+  }
+
+  function createSwingBarrier(zPos) {
+    const group = new THREE.Group();
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 0.3), matBarrier);
+    bar.position.y = 0.55; bar.castShadow = true; group.add(bar);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 6), matRail);
+    pole.position.set(0, 2.2, 0); group.add(pole);
+    for (const dx of [-0.9, 0.9]) {
+      const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.3, 5), matRail);
+      chain.position.set(dx, 1.3, 0); group.add(chain);
+    }
+    group.position.set(0, 0, zPos);
+    scene.add(group);
+    obstacles.push({ group, lane: 1, type: 'swing_barrier', length: 0.4, swingPhase: Math.random() * Math.PI * 2, swingSpeed: 1.4 + Math.random() * 0.7, nearMissDone: false });
+  }
+
+  function createRamp(lane, zPos) {
+    const group = new THREE.Group();
+    const wedge = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 1.4), matRamp);
+    wedge.rotation.x = -0.35; wedge.position.y = 0.18; wedge.castShadow = true; group.add(wedge);
+    const stripes = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.06, 0.3), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+    stripes.position.set(0, 0.42, -0.4); stripes.rotation.x = -0.35; group.add(stripes);
+    group.position.set(LANES[lane], 0, zPos);
+    scene.add(group);
+    obstacles.push({ group, lane, type: 'ramp', length: 1.4, triggered: false, nearMissDone: true });
+  }
+
+  function spawnObstacleGroupAt(zPos) {
+    const lane = Math.floor(Math.random() * 3);
+    let trainBias = 0.28, barrierBias = 0.5, highBias = 0.7, swingBias = 0.85;
+    if (currentZone === 'cargo_yard') { trainBias = 0.5; barrierBias = 0.65; highBias = 0.8; swingBias = 0.9; }
+    else if (currentZone === 'construction') { trainBias = 0.12; barrierBias = 0.5; highBias = 0.68; swingBias = 0.8; }
+    else if (currentZone === 'tunnel') { trainBias = 0.35; barrierBias = 0.6; highBias = 0.85; swingBias = 0.92; }
+    else if (currentZone === 'bridge') { trainBias = 0.2; barrierBias = 0.55; highBias = 0.78; swingBias = 0.9; }
+    const r = Math.random();
+
+    if (r < trainBias) {
+      createTrain(lane, zPos);
+      if (Math.random() < 0.4) {
+        const adj = lane === 1 ? (Math.random() < 0.5 ? 0 : 2) : 1;
+        if (Math.random() < 0.5) createBarrier(adj, zPos); else createHighBarrier(adj, zPos);
+      }
+    } else if (r < barrierBias) {
+      createBarrier(lane, zPos);
+      if (Math.random() < 0.3) createBarrier((lane + 1) % 3, zPos);
+    } else if (r < highBias) {
+      createHighBarrier(lane, zPos);
+      if (Math.random() < 0.25) createBarrier((lane + (Math.random() < 0.5 ? 1 : 2)) % 3, zPos);
+    } else if (r < swingBias) {
+      createSwingBarrier(zPos);
+    } else {
+      createRamp(lane, zPos);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // COINS + POWER-UPS
+  // ══════════════════════════════════════════════════════════════
+  const coinObjects = [];
+  function spawnCoinLine(lane, zPos) {
+    const count = 3 + Math.floor(Math.random() * 5);
+    const yBase = Math.random() < 0.3 ? 2.0 : 0.8;
+    for (let i = 0; i < count; i++) {
+      const c = new THREE.Mesh(coinGeom, matCoin);
+      c.position.set(LANES[lane], yBase, zPos - i * 1.5);
+      c.rotation.x = Math.PI / 2;
+      scene.add(c);
+      coinObjects.push({ mesh: c, lane, collected: false });
+    }
+  }
+
+  const powerupObjects = [];
+  function spawnPowerup(lane, zPos) {
+    const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: type.color, emissive: type.color, emissiveIntensity: 0.6, metalness: 0.3, roughness: 0.3 });
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.32, 0), mat);
+    core.castShadow = true; group.add(core);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.04, 8, 20), mat);
+    ring.rotation.x = Math.PI / 2; ring.position.y = -0.28; group.add(ring);
+    group.position.set(LANES[lane], 1.3, zPos);
+    scene.add(group);
+    powerupObjects.push({ group, core, ring, type, collected: false });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // PARTICLES
+  // ══════════════════════════════════════════════════════════════
+  const particles = [];
+  function spawnCoinParticle(pos) {
+    const geo = new THREE.SphereGeometry(0.06, 4, 4);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true });
+    for (let i = 0; i < 6; i++) {
+      const p = new THREE.Mesh(geo, mat.clone());
+      p.position.copy(pos);
+      const vel = new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 5 + 2, (Math.random() - 0.5) * 4);
+      scene.add(p); particles.push({ mesh: p, vel, life: 0.6, maxLife: 0.6 });
+    }
+  }
+  function spawnCrashParticle(pos, color) {
+    const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+    const mat = new THREE.MeshBasicMaterial({ color: color || 0xff4444, transparent: true });
+    for (let i = 0; i < 15; i++) {
+      const p = new THREE.Mesh(geo, mat.clone());
+      p.position.copy(pos);
+      const vel = new THREE.Vector3((Math.random() - 0.5) * 8, Math.random() * 8 + 3, (Math.random() - 0.5) * 8);
+      scene.add(p); particles.push({ mesh: p, vel, life: 1.0, maxLife: 1.0 });
+    }
+  }
+  function spawnJetpackParticle() {
+    const geo = new THREE.SphereGeometry(0.05, 4, 4);
+    const mat = new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff6600 : 0xffcc00, transparent: true });
+    const p = new THREE.Mesh(geo, mat);
+    p.position.copy(player.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 1.0, 0.35));
+    scene.add(p);
+    const vel = new THREE.Vector3((Math.random() - 0.5) * 1, -3 - Math.random() * 2, (Math.random() - 0.5) * 1);
+    particles.push({ mesh: p, vel, life: 0.35, maxLife: 0.35 });
+  }
+  function spawnBoardBreakParticle(pos) {
+    const geo = new THREE.BoxGeometry(0.08, 0.02, 0.15);
+    const mat = new THREE.MeshBasicMaterial({ color: matHoverboard.color.getHex(), transparent: true });
+    for (let i = 0; i < 10; i++) {
+      const p = new THREE.Mesh(geo, mat.clone());
+      p.position.copy(pos);
+      const vel = new THREE.Vector3((Math.random() - 0.5) * 5, Math.random() * 4 + 1, (Math.random() - 0.5) * 5);
+      scene.add(p); particles.push({ mesh: p, vel, life: 0.7, maxLife: 0.7 });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // WEATHER (rain + lightning)
+  // ══════════════════════════════════════════════════════════════
+  const RAIN_COUNT = 260;
+  const rainGeo = new THREE.BoxGeometry(0.02, 0.5, 0.02);
+  const rainMat = new THREE.MeshBasicMaterial({ color: 0xaaccff, transparent: true, opacity: 0.5 });
+  const rainMesh = new THREE.InstancedMesh(rainGeo, rainMat, RAIN_COUNT);
+  rainMesh.visible = false;
+  scene.add(rainMesh);
+  const rainDrops = [];
+  for (let i = 0; i < RAIN_COUNT; i++) {
+    rainDrops.push({ x: (Math.random() - 0.5) * 40, y: Math.random() * 20, z: (Math.random() - 0.5) * 60 - 10, speed: 14 + Math.random() * 8 });
+  }
+  const rainDummy = new THREE.Object3D();
+  function updateRain(dt) {
+    if (!rainMesh.visible) return;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      const d = rainDrops[i];
+      d.y -= d.speed * dt;
+      if (d.y < 0) { d.y = 16 + Math.random() * 8; d.x = (Math.random() - 0.5) * 40; d.z = player.position.z + (Math.random() - 0.5) * 60 - 10; }
+      rainDummy.position.set(player.position.x + d.x, d.y, d.z);
+      rainDummy.rotation.x = 0.3;
+      rainDummy.updateMatrix();
+      rainMesh.setMatrixAt(i, rainDummy.matrix);
+    }
+    rainMesh.instanceMatrix.needsUpdate = true;
+  }
+  function spawnLightning() {
+    const el = document.getElementById('lightning-flash');
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    playThunderSound();
+  }
+  function updateWeather(dt) {
+    weatherTimer -= dt;
+    if (weatherTimer <= 0) {
+      const options = ['sunny', 'sunny', 'rain', 'fog', 'storm'];
+      let next = options[Math.floor(Math.random() * options.length)];
+      if (next === currentWeather) next = 'sunny';
+      currentWeather = next;
+      weatherTimer = 25 + Math.random() * 30;
+      updateConditionsBadge();
+      if (currentWeather === 'rain') showToast('Rain rolling in', '#66aadd');
+      else if (currentWeather === 'storm') showToast('Storm approaching!', '#aa88ff');
+      else if (currentWeather === 'fog') showToast('Fog rolling in', '#aaaaaa');
+      rainMesh.visible = (currentWeather === 'rain' || currentWeather === 'storm');
+    }
+    if (currentWeather === 'storm') {
+      lightningTimer -= dt;
+      if (lightningTimer <= 0) { spawnLightning(); lightningTimer = 4 + Math.random() * 6; }
+    }
+    updateRain(dt);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // CAMERA HELPERS
+  // ══════════════════════════════════════════════════════════════
+  const cameraOffset = new THREE.Vector3(0, 4.5, 8);
+  const cameraLookOffset = new THREE.Vector3(0, 1.5, -5);
+  camera.position.copy(cameraOffset);
+
+  function triggerShake(amount) { shakeIntensity = Math.max(shakeIntensity, amount); }
+  function flashDamage() {
+    const el = document.getElementById('vignette-flash');
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // TOASTS
+  // ══════════════════════════════════════════════════════════════
+  function showToast(text, color) {
+    const el = document.createElement('div');
+    el.className = 'toast'; el.style.color = color || '#fff'; el.textContent = text;
+    document.getElementById('toast-container').appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 1700);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MISSIONS
+  // ══════════════════════════════════════════════════════════════
+  function generateMissions() {
+    missions = [];
+    const pool = MISSION_POOL.slice();
+    for (let i = 0; i < 3 && pool.length; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      const def = pool.splice(idx, 1)[0];
+      const target = def.make();
+      missions.push({ key: def.key, label: def.label(target), target, progress: 0, reward: def.reward(target), complete: false });
+    }
+    renderMissions();
+  }
+  function updateMissions() {
+    for (const m of missions) {
+      if (m.complete) continue;
+      let val = 0;
+      if (m.key === 'coins') val = coinsThisRun;
+      else if (m.key === 'jumps') val = jumpsThisRun;
+      else if (m.key === 'slides') val = slidesThisRun;
+      else if (m.key === 'distance') val = Math.floor(distance);
+      else if (m.key === 'powerups') val = powerupsThisRun;
+      else if (m.key === 'nearmiss') val = nearMissThisRun;
+      else if (m.key === 'roof') val = roofRidesThisRun;
+      m.progress = Math.min(val, m.target);
+      if (val >= m.target) {
+        m.complete = true;
+        coins += m.reward;
+        showToast('Mission complete +' + m.reward + ' coins', '#ffd700');
+        playChimeSound();
+      }
+    }
+    renderMissions();
+  }
+  function renderMissions() {
+    const el = document.getElementById('mission-list');
+    let html = '';
+    for (const m of missions) {
+      const pct = Math.min(100, (m.progress / m.target) * 100);
+      html += '<div class="mission-row' + (m.complete ? ' mission-complete' : '') + '">' +
+        '<div class="mission-label">' + (m.complete ? '&#10003; ' : '') + m.label + '</div>' +
+        '<div class="mission-bar"><div class="mission-bar-fill" style="width:' + pct + '%"></div></div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // HUD HELPERS
+  // ══════════════════════════════════════════════════════════════
+  function updateHoverboardHUD() {
+    const el = document.getElementById('hoverboard-indicator');
+    el.classList.toggle('active', hoverboardCharges > 0);
+    document.getElementById('hoverboard-charges').textContent = hoverboardCharges;
+  }
+  function updateDangerMeter() {
+    const dots = document.querySelectorAll('#danger-meter .danger-dot');
+    dots.forEach((d, i) => d.classList.toggle('lit', i < mistakeCount));
+  }
+  function updateConditionsBadge() {
+    const el = document.getElementById('conditions-badge');
+    const icon = WEATHER_ICON[currentWeather] || '☀️';
+    const zoneLabel = ZONE_NAMES[currentZone] || '';
+    el.textContent = icon + (zoneLabel ? ' · ' + zoneLabel : '');
+  }
+  function updatePowerupHUD() {
+    const el = document.getElementById('powerup-hud');
+    const items = [];
+    if (isFlying) items.push({ icon: '🚀', time: flightTimer, total: effectiveDuration.jetpack, color: '#ff3366' });
+    if (powerupTimers.magnet > 0) items.push({ icon: '🧲', time: powerupTimers.magnet, total: effectiveDuration.magnet, color: '#33ccff' });
+    if (powerupTimers.coinx2 > 0) items.push({ icon: '×2', time: powerupTimers.coinx2, total: effectiveDuration.coinx2, color: '#ffd700' });
+    if (powerupTimers.sneakers > 0) items.push({ icon: '👟', time: powerupTimers.sneakers, total: effectiveDuration.sneakers, color: '#33ff66' });
+    let html = '';
+    for (const it of items) {
+      const pct = Math.max(0, it.time / it.total) * 100;
+      html += '<div class="powerup-icon"><div class="pi-ring" style="background:conic-gradient(' + it.color + ' ' + pct + '%, rgba(255,255,255,0.15) ' + pct + '%)"><div class="pi-inner">' + it.icon + '</div></div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function addCombo(points) {
+    comboPoints += points;
+    comboIdleTimer = 0;
+    const newLevel = Math.min(MAX_COMBO_LEVEL, Math.floor(comboPoints / 10) + 1);
+    if (newLevel > comboLevel) {
+      comboLevel = newLevel;
+      playMultiplierSound();
+      showToast('Combo x' + comboLevel + '!', '#ff6b35');
+    }
+  }
+  function coinGain() {
+    const g = Math.round(comboLevel * activeCoinMult * (powerupTimers.coinx2 > 0 ? 2 : 1));
+    return Math.max(1, g);
+  }
+  function collectCoin(c) {
+    c.collected = true;
+    spawnCoinParticle(c.mesh.position.clone());
+    scene.remove(c.mesh);
+    addCombo(1);
+    const gain = coinGain();
+    coins += gain; coinsThisRun += gain;
+    playCoinSound();
+  }
+
+  function activatePowerup(type) {
+    powerupsThisRun++;
+    playPowerupSound();
+    if (type.key === 'jetpack') {
+      isOnTrain = false; currentTrainObs = null;
+      isFlying = true; isJumping = false; isSliding = false; playerVelY = 0;
+      flightTimer = effectiveDuration.jetpack;
+      showToast('Jetpack! Soar and grab coins', '#ff3366');
+    } else if (type.key === 'magnet') {
+      powerupTimers.magnet = effectiveDuration.magnet;
+      showToast('Coin magnet active', '#33ccff');
+    } else if (type.key === 'coinx2') {
+      powerupTimers.coinx2 = effectiveDuration.coinx2;
+      showToast('2x coins!', '#ffd700');
+    } else if (type.key === 'sneakers') {
+      powerupTimers.sneakers = effectiveDuration.sneakers;
+      showToast('Super sneakers — smash barriers!', '#33ff66');
+    }
+    updatePowerupHUD();
+  }
+
+  function breakHoverboard() {
+    hoverboardCharges = Math.max(0, hoverboardCharges - 1);
+    spawnBoardBreakParticle(player.position.clone().add(new THREE.Vector3(0, 0.15, 0)));
+    hoverboardMesh.visible = hoverboardCharges > 0;
+    updateHoverboardHUD();
+  }
+
+  function triggerStumbleAnim() {
+    tumbleAngVel.x = 0; // reserved; stumble pose handled via inspectorState in animatePlayer
+  }
+
+  function registerHit() {
+    if (hoverboardCharges > 0) {
+      invincibleTimer = 1.2;
+      triggerShake(0.5);
+      flashDamage();
+      breakHoverboard();
+      playShieldSound();
+      showToast(hoverboardCharges > 0 ? 'Board absorbed the hit!' : 'Hoverboard destroyed!', '#ffd700');
+      return;
+    }
+    mistakeCount++;
+    invincibleTimer = 1.3;
+    triggerShake(0.7);
+    flashDamage();
+    updateDangerMeter();
+    if (mistakeCount === 1) {
+      inspectorState = 'stumble';
+      inspectorTargetDistance = 9;
+      playStumbleSound();
+      triggerStumbleAnim();
+      showToast('The inspector spotted you!', '#ff6644');
+    } else if (mistakeCount === 2) {
+      inspectorState = 'chase';
+      inspectorTargetDistance = 4.5;
+      playStumbleSound();
+      triggerStumbleAnim();
+      showToast('He is right behind you!', '#ff3322');
+    } else {
+      inspectorState = 'capture';
+      inspectorTargetDistance = 0.8;
+      gameOver();
+    }
+  }
+
+  function awardNearMiss(label) {
+    nearMissThisRun++;
+    addCombo(3);
+    const gain = Math.round(10 * activeCoinMult);
+    coins += gain; coinsThisRun += gain;
+    showToast(label + ' +' + gain + ' coins', '#00e5ff');
+    cameraZoomTimer = 0.15;
+    playNearMissSound();
+  }
+
+  function checkNearMisses() {
+    for (const obs of obstacles) {
+      if (obs.nearMissDone) continue;
+      const z = obs.group.position.z;
+      if (z < 0.4) continue;
+      obs.nearMissDone = true;
+      if (isOnTrain) continue;
+      if (obs.type === 'train') {
+        if (Math.abs(obs.group.position.x - LANES[currentLane]) < LANE_WIDTH * 1.6 && Math.abs(obs.group.position.x - LANES[currentLane]) > 0.1) {
+          awardNearMiss('Train close pass!');
+          if (obs.kind === 'express' || obs.kind === 'oncoming') triggerShake(0.3);
+        }
+      } else if (obs.type === 'low_barrier' || obs.type === 'swing_barrier') {
+        if (Math.abs(obs.group.position.x - LANES[currentLane]) < 1.0) awardNearMiss('Perfect jump!');
+      } else if (obs.type === 'high_barrier') {
+        if (Math.abs(obs.group.position.x - LANES[currentLane]) < 1.0) awardNearMiss('Perfect slide!');
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // INSPECTOR + DOG CHASE
+  // ══════════════════════════════════════════════════════════════
+  function updateInspectorChase(dt) {
+    if (inspectorState === 'normal') { inspectorMesh.visible = false; dogMesh.visible = false; return; }
+    inspectorMesh.visible = true;
+    dogMesh.visible = inspectorState !== 'stumble';
+    inspectorDistance = THREE.MathUtils.lerp(inspectorDistance, inspectorTargetDistance, dt * 1.5);
+    inspectorMesh.position.x = THREE.MathUtils.lerp(inspectorMesh.position.x, player.position.x, dt * 2);
+    inspectorMesh.position.y = Math.sin(elapsedTime * 8) * 0.08;
+    inspectorMesh.position.z = player.position.z + inspectorDistance;
+    dogMesh.position.x = THREE.MathUtils.lerp(dogMesh.position.x, player.position.x + 1.0, dt * 2.5);
+    dogMesh.position.y = Math.sin(elapsedTime * 10) * 0.06;
+    dogMesh.position.z = player.position.z + inspectorDistance + 1.2;
+
+    const swing = Math.sin(elapsedTime * 10);
+    inspectorMesh.userData.legL.rotation.x = swing * 0.6;
+    inspectorMesh.userData.legR.rotation.x = -swing * 0.6;
+    inspectorMesh.userData.armL.rotation.x = -swing * 0.5;
+    inspectorMesh.userData.armR.rotation.x = swing * 0.5;
+    const legs = dogMesh.userData.legs;
+    for (let i = 0; i < legs.length; i++) legs[i].rotation.x = Math.sin(elapsedTime * 14 + i * Math.PI / 2) * 0.5;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // SPAWN TRACKING (initial background fill for the menu)
+  // ══════════════════════════════════════════════════════════════
+  for (let i = -1; i <= 3; i++) createGroundChunk(i * CHUNK_LENGTH);
+  let nextObstacleZ = -30, nextCoinZ = -15, nextPowerupZ = -60;
+  for (let i = 0; i < 8; i++) { spawnObstacleGroupAt(nextObstacleZ); nextObstacleZ -= 8 + Math.random() * 12; }
+  for (let i = 0; i < 6; i++) { spawnCoinLine(Math.floor(Math.random() * 3), nextCoinZ); nextCoinZ -= 5 + Math.random() * 8; }
+
+  // ══════════════════════════════════════════════════════════════
+  // PLAYER BOUNDING BOX
+  // ══════════════════════════════════════════════════════════════
+  function getPlayerBBox() {
+    const w = 0.5, d = 0.3;
+    let h, yCenter;
+    if (isFlying) { h = 1.2; yCenter = playerY; }
+    else if (isOnTrain) { h = 1.2; yCenter = playerY; }
+    else if (isSliding) { h = 0.6; yCenter = playerY + 0.3; }
+    else { h = 1.8; yCenter = playerY + 0.9; }
+    return new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(player.position.x, yCenter, player.position.z), new THREE.Vector3(w, h, d));
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // INPUT HANDLING
+  // ══════════════════════════════════════════════════════════════
+  const keys = {};
+  let touchStartX = 0, touchStartY = 0;
+
+  function moveLeft() { if (!isOnTrain && currentLane > 0) { currentLane--; targetX = LANES[currentLane]; } }
+  function moveRight() { if (!isOnTrain && currentLane < 2) { currentLane++; targetX = LANES[currentLane]; } }
+  function jump() {
+    if (isOnTrain) {
+      isOnTrain = false; currentTrainObs = null;
+      isJumping = true; playerVelY = activeJumpVelocity * 0.8;
+      jumpsThisRun++; playJumpSound();
+      return;
+    }
+    if (!isJumping && !isSliding && !isFlying) {
+      isJumping = true; playerVelY = activeJumpVelocity; jumpsThisRun++; playJumpSound();
+    }
+  }
+  function slide() {
+    if (!isJumping && !isSliding && !isFlying && !isOnTrain) {
+      isSliding = true; slideTimer = SLIDE_DURATION; slidesThisRun++; playSlideSound();
+    }
+  }
+  function togglePause() {
+    if (gameState === 'playing') { gameState = 'paused'; document.getElementById('pause-screen').style.display = 'flex'; }
+    else if (gameState === 'paused') { gameState = 'playing'; document.getElementById('pause-screen').style.display = 'none'; lastTime = performance.now(); }
+  }
+  function toggleMute() { muted = !muted; document.getElementById('btn-mute').textContent = muted ? '🔇' : '🔊'; }
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'KeyP' || e.code === 'Escape') {
+      if (gameState === 'playing' || gameState === 'paused') { togglePause(); e.preventDefault(); }
+      return;
+    }
+    if (e.code === 'KeyM') { toggleMute(); return; }
+    if (gameState === 'menu' && (e.code === 'Space' || e.code === 'Enter')) { startGame(); e.preventDefault(); return; }
+    if (gameState === 'dead' && (e.code === 'Space' || e.code === 'Enter')) { startGame(); e.preventDefault(); return; }
+    if (gameState !== 'playing') return;
+    if (keys[e.code]) return;
+    keys[e.code] = true;
+    switch (e.code) {
+      case 'ArrowLeft': case 'KeyA': moveLeft(); break;
+      case 'ArrowRight': case 'KeyD': moveRight(); break;
+      case 'ArrowUp': case 'KeyW': case 'Space': jump(); e.preventDefault(); break;
+      case 'ArrowDown': case 'KeyS': slide(); break;
+    }
+  });
+  document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  document.addEventListener('touchstart', e => {
+    if (gameState !== 'playing') return;
+    touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (gameState !== 'playing') return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy)) { if (Math.abs(dx) > 30) { if (dx < 0) moveLeft(); else moveRight(); } }
+    else { if (Math.abs(dy) > 30) { if (dy < 0) jump(); else slide(); } }
+  }, { passive: true });
+
+  // ══════════════════════════════════════════════════════════════
+  // ANIMATION
+  // ══════════════════════════════════════════════════════════════
+  let runCycle = 0;
+
+  function animatePlayer(dt) {
+    if (gameState !== 'playing') return;
+    runCycle += dt * speed * 0.6;
+
+    if (isOnTrain && currentTrainObs) {
+      player.position.x = THREE.MathUtils.lerp(player.position.x, currentTrainObs.group.position.x, dt * 10);
+      player.rotation.z *= 0.85;
+    } else {
+      const diff = targetX - player.position.x;
+      if (Math.abs(diff) > 0.05) {
+        player.position.x += Math.sign(diff) * LANE_SWITCH_SPEED * dt;
+        if (Math.abs(targetX - player.position.x) < 0.05) player.position.x = targetX;
+        player.rotation.z = -Math.sign(diff) * 0.15;
+      } else {
+        player.position.x = targetX;
+        player.rotation.z *= 0.85;
+      }
+    }
+
+    if (isFlying) {
+      playerY = THREE.MathUtils.lerp(playerY, FLIGHT_HEIGHT, dt * 3.5);
+    } else if (isOnTrain) {
+      playerY = THREE.MathUtils.lerp(playerY, ROOF_Y, dt * 8);
+    } else if (isJumping) {
+      playerVelY += GRAVITY * dt;
+      playerY += playerVelY * dt;
+      if (playerY <= 0) {
+        playerY = 0; playerVelY = 0; isJumping = false;
+        playLandSound(); landingSquashTimer = 0.15;
+      }
+    }
+    if (isSliding) { slideTimer -= dt; if (slideTimer <= 0) isSliding = false; }
+
+    player.position.y = playerY;
+    jetpackGroup.visible = isFlying;
+    hoverboardMesh.visible = hoverboardCharges > 0 && !isSliding;
+
+    if (isFlying) {
+      jetpackParticleTimer -= dt;
+      if (jetpackParticleTimer <= 0) { spawnJetpackParticle(); jetpackParticleTimer = 0.04; }
+      const flick = 0.8 + Math.random() * 0.4;
+      flameL.scale.set(1, flick, 1); flameR.scale.set(1, flick, 1);
+    }
+
+    if (isFlying) {
+      torso.scale.set(1, 1, 1); torso.position.y = 1.15;
+      leftArm.pivot.rotation.x = -1.6; leftArm.knee.rotation.x = 0.3;
+      rightArm.pivot.rotation.x = -1.6; rightArm.knee.rotation.x = 0.3;
+      leftLeg.pivot.rotation.x = 0.25; leftLeg.knee.rotation.x = 0.5;
+      rightLeg.pivot.rotation.x = -0.25; rightLeg.knee.rotation.x = 0.5;
+    } else if (isOnTrain) {
+      torso.scale.set(1, 1, 1); torso.position.y = 1.15;
+      leftArm.pivot.rotation.x = -1.4; leftArm.knee.rotation.x = 0.1;
+      rightArm.pivot.rotation.x = -1.3; rightArm.knee.rotation.x = 0.1;
+      leftLeg.pivot.rotation.x = Math.sin(runCycle) * 0.3; leftLeg.knee.rotation.x = 0.15;
+      rightLeg.pivot.rotation.x = -Math.sin(runCycle) * 0.3; rightLeg.knee.rotation.x = 0.15;
+    } else if (isSliding) {
+      torso.scale.set(1, 0.5, 1); torso.position.y = 0.55;
+      leftArm.pivot.rotation.x = -1.2; leftArm.knee.rotation.x = 0.6;
+      rightArm.pivot.rotation.x = -1.2; rightArm.knee.rotation.x = 0.6;
+      leftLeg.pivot.rotation.x = -1.0; leftLeg.knee.rotation.x = 1.2;
+      rightLeg.pivot.rotation.x = -1.0; rightLeg.knee.rotation.x = 1.2;
+    } else if (isJumping) {
+      torso.scale.set(1, 1, 1); torso.position.y = 1.15;
+      leftArm.pivot.rotation.x = -2.0; leftArm.knee.rotation.x = 0.4;
+      rightArm.pivot.rotation.x = -2.0; rightArm.knee.rotation.x = 0.4;
+      leftLeg.pivot.rotation.x = 1.0; leftLeg.knee.rotation.x = 1.4;
+      rightLeg.pivot.rotation.x = 0.6; rightLeg.knee.rotation.x = 1.0;
+    } else if (inspectorState === 'stumble') {
+      torso.scale.set(1, 1, 1); torso.position.y = 1.1;
+      player.rotation.x = 0.25;
+      leftArm.pivot.rotation.x = -0.6 + Math.sin(runCycle * 2) * 0.4;
+      rightArm.pivot.rotation.x = 0.4 + Math.sin(runCycle * 2) * -0.4;
+      leftLeg.pivot.rotation.x = Math.sin(runCycle * 1.4) * 0.7;
+      rightLeg.pivot.rotation.x = -Math.sin(runCycle * 1.4) * 0.7;
+    } else {
+      player.rotation.x = THREE.MathUtils.lerp(player.rotation.x, 0, dt * 6);
+      torso.scale.set(1, 1, 1);
+      torso.position.y = 1.15 + Math.abs(Math.sin(runCycle)) * 0.06;
+      const swing = Math.sin(runCycle);
+      leftLeg.pivot.rotation.x = swing * 0.9;
+      rightLeg.pivot.rotation.x = -swing * 0.9;
+      leftLeg.knee.rotation.x = Math.max(0, -swing) * 1.2;
+      rightLeg.knee.rotation.x = Math.max(0, swing) * 1.2;
+      leftArm.pivot.rotation.x = -swing * 0.9;
+      rightArm.pivot.rotation.x = swing * 0.9;
+      leftArm.knee.rotation.x = 0.25 + Math.max(0, swing) * 0.5;
+      rightArm.knee.rotation.x = 0.25 + Math.max(0, -swing) * 0.5;
+    }
+
+    if (landingSquashTimer > 0 && !isSliding) {
+      landingSquashTimer -= dt;
+      const s = Math.max(0, landingSquashTimer / 0.15);
+      torso.scale.y *= (1 - 0.25 * s);
+      torso.scale.x *= (1 + 0.15 * s);
+      torso.scale.z *= (1 + 0.15 * s);
+    }
+
+    head.position.y = 1.75 + (torso.position.y - 1.15);
+    hair.position.y = head.position.y + 0.03;
+    cap.position.y = head.position.y + 0.17;
+    capBrim.position.y = head.position.y + 0.15;
+    backpack.position.y = torso.position.y;
+    hoverboardMesh.position.y = playerY + 0.08;
+  }
+
+  function updateTumble(dt) {
+    if (tumbleTimer <= 0) return;
+    tumbleTimer -= dt;
+    playerVelY += GRAVITY * dt;
+    playerY += playerVelY * dt;
+    if (playerY < 0) { playerY = 0; playerVelY *= -0.25; }
+    player.position.y = playerY;
+    player.rotation.x += tumbleAngVel.x * dt;
+    player.rotation.z += tumbleAngVel.z * dt;
+    tumbleAngVel.x *= 0.97; tumbleAngVel.z *= 0.97;
+  }
+
+  function updateTrainRide(dt) {
+    if (!isOnTrain) return;
+    if (!currentTrainObs || obstacles.indexOf(currentTrainObs) === -1) {
+      isOnTrain = false; isJumping = true; playerVelY = 0; currentTrainObs = null; return;
+    }
+    const backZ = currentTrainObs.group.position.z - currentTrainObs.length;
+    if (backZ > 1.5) {
+      isOnTrain = false; isJumping = true; playerVelY = 0; currentTrainObs = null;
+      return;
+    }
+    for (const hz of currentTrainObs.roofHazards) {
+      if (hz.hit) continue;
+      const worldZ = currentTrainObs.group.position.z + hz.localZ;
+      if (Math.abs(worldZ) < 0.5) {
+        hz.hit = true;
+        if (invincibleTimer <= 0) registerHit();
+      }
+    }
+    for (const rp of currentTrainObs.roofPickups) {
+      if (rp.collected) continue;
+      const worldZ = currentTrainObs.group.position.z + rp.localZ;
+      if (Math.abs(worldZ) < 1.0) {
+        rp.collected = true;
+        scene.remove(rp.mesh);
+        if (rp.kind === 'coin') {
+          addCombo(1);
+          const gain = coinGain();
+          coins += gain; coinsThisRun += gain;
+          playCoinSound();
+        } else {
+          const pt = POWERUP_TYPES.filter(p => p.key === rp.kind)[0];
+          if (pt) activatePowerup(pt);
+        }
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // COLLISION
+  // ══════════════════════════════════════════════════════════════
+  function checkCollisions(dt) {
+    const pBox = getPlayerBBox();
+
+    if (!isFlying) {
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        if (isOnTrain && obs.type !== 'train') continue;
+        const oPos = obs.group.position;
+        let obsBox = null;
+        if (obs.type === 'train') {
+          obsBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(oPos.x, 1.5, oPos.z - obs.length / 2), new THREE.Vector3(1.3, 2.8, obs.length));
+        } else if (obs.type === 'low_barrier' || obs.type === 'swing_barrier') {
+          obsBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(oPos.x, 0.55, oPos.z), new THREE.Vector3(1.6, 0.95, 0.4));
+        } else if (obs.type === 'high_barrier') {
+          obsBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(oPos.x, 1.5, oPos.z), new THREE.Vector3(1.3, 3.0, 0.8));
+        } else if (obs.type === 'ramp') {
+          obsBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(oPos.x, 0.3, oPos.z), new THREE.Vector3(1.6, 0.6, 1.3));
+        }
+        if (!obsBox || !pBox.intersectsBox(obsBox)) continue;
+
+        if (obs.type === 'ramp') {
+          if (!obs.triggered && !isJumping && !isSliding && !isOnTrain) {
+            obs.triggered = true; isJumping = true; playerVelY = activeJumpVelocity * 1.25;
+            jumpsThisRun++; playJumpSound();
+          }
+          continue;
+        }
+
+        if (obs.type === 'train') {
+          if (!isOnTrain && isJumping && playerVelY <= 0 && playerY >= ROOF_Y - 0.55 && playerY <= ROOF_Y + 0.9) {
+            isOnTrain = true; currentTrainObs = obs; isJumping = false; playerVelY = 0; playerY = ROOF_Y;
+            roofRidesThisRun++;
+            showToast('On the roof!', '#ffd700'); playLandSound();
+            continue;
+          }
+          if (isOnTrain && currentTrainObs === obs) continue;
+        }
+
+        if ((obs.type === 'low_barrier' || obs.type === 'swing_barrier') && isJumping && playerY > 0.5) continue;
+        if (obs.type === 'high_barrier' && isSliding) continue;
+
+        if (obs.type !== 'train' && powerupTimers.sneakers > 0) {
+          spawnCrashParticle(oPos.clone().add(new THREE.Vector3(0, 1, 0)), 0xff6600);
+          scene.remove(obs.group); obstacles.splice(i, 1);
+          playSmashSound();
+          continue;
+        }
+
+        if (invincibleTimer <= 0) {
+          obs.nearMissDone = true;
+          registerHit();
+          if (gameState !== 'playing') return;
+        }
+      }
+    }
+
+    for (const c of coinObjects) {
+      if (c.collected) continue;
+      let hit = false;
+      if (isFlying) {
+        hit = Math.abs(c.mesh.position.z - player.position.z) < 3.5;
+      } else if (isOnTrain) {
+        hit = false;
+      } else {
+        if (powerupTimers.magnet > 0 && c.lane !== currentLane) {
+          const dz = c.mesh.position.z - player.position.z;
+          if (Math.abs(dz) < 14) c.mesh.position.x = THREE.MathUtils.lerp(c.mesh.position.x, player.position.x, dt * 6);
+        }
+        const cBox = new THREE.Box3().setFromCenterAndSize(c.mesh.position.clone(), new THREE.Vector3(0.5, 0.5, 0.5));
+        hit = pBox.intersectsBox(cBox);
+      }
+      if (hit) collectCoin(c);
+    }
+
+    if (!isFlying && !isOnTrain) {
+      for (const p of powerupObjects) {
+        if (p.collected) continue;
+        const pwBox = new THREE.Box3().setFromCenterAndSize(p.group.position.clone(), new THREE.Vector3(0.9, 0.9, 0.9));
+        if (pBox.intersectsBox(pwBox)) { p.collected = true; scene.remove(p.group); activatePowerup(p.type); }
+      }
+    }
+
+    checkNearMisses();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // GAME OVER
+  // ══════════════════════════════════════════════════════════════
+  function gameOver() {
+    gameState = 'dead';
+    isOnTrain = false; currentTrainObs = null;
+    tumbleAngVel = { x: 3 + Math.random() * 3, z: (Math.random() - 0.5) * 6 };
+    playerVelY = 6;
+    tumbleTimer = 1.1;
+    timeScale = 0.35;
+    triggerShake(1.2);
+    flashDamage();
+    playCrashSound();
+    spawnCrashParticle(player.position.clone().add(new THREE.Vector3(0, 1, 0)));
+
+    let newBest = false;
+    if (Math.floor(distance) > bestDistance) { bestDistance = Math.floor(distance); newBest = true; }
+    if (coins > bestCoins) bestCoins = coins;
+    totalCoinsAllTime += coins;
+    bank += coins;
+    saveProgress();
+
+    setTimeout(() => {
+      document.getElementById('game-over-title').textContent = 'CAUGHT!';
+      document.getElementById('final-dist').textContent = Math.floor(distance);
+      document.getElementById('final-coins').textContent = coins;
+      document.getElementById('new-best-banner').style.display = newBest ? 'block' : 'none';
+      const completedCount = missions.filter(m => m.complete).length;
+      document.getElementById('mission-summary').textContent = completedCount + ' of ' + missions.length + ' missions completed';
+      document.getElementById('game-over').style.display = 'flex';
+      updateMenuStats();
+    }, 550);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // UPDATE LOOP
+  // ══════════════════════════════════════════════════════════════
+  function update(rawDt) {
+    updateTumble(rawDt * timeScale);
+    if (gameState !== 'playing') { renderer.render(scene, camera); return; }
+
+    const dt = rawDt * timeScale;
+    elapsedTime += dt;
+    cycleTime += dt;
+    speed = Math.min(GROUND_SPEED_MAX * runSpeedMult, speed + SPEED_INCREASE * runSpeedMult * dt);
+    distance += speed * dt;
+
+    camera.fov = 65 + (speed / (GROUND_SPEED_MAX * runSpeedMult)) * 8;
+    if (cameraZoomTimer > 0) { camera.fov -= 5 * (cameraZoomTimer / 0.15); cameraZoomTimer = Math.max(0, cameraZoomTimer - dt); }
+    camera.updateProjectionMatrix();
+
+    for (const obs of obstacles) {
+      if (obs.type === 'train') obs.group.position.z += speed * dt * obs.speedMult;
+      else obs.group.position.z += speed * dt;
+      if (obs.type === 'swing_barrier') obs.group.position.x = Math.sin(elapsedTime * obs.swingSpeed + obs.swingPhase) * LANE_WIDTH * 0.9;
+    }
+    for (const c of coinObjects) if (!c.collected) { c.mesh.position.z += speed * dt; c.mesh.rotation.y += dt * 3; }
+    for (const p of powerupObjects) {
+      if (!p.collected) {
+        p.group.position.z += speed * dt;
+        p.core.rotation.y += dt * 2.2; p.core.rotation.x += dt * 1.4;
+        p.group.position.y = 1.3 + Math.sin(elapsedTime * 3 + p.group.position.x) * 0.15;
+      }
+    }
+    for (const chunk of groundChunks) chunk.group.position.z += speed * dt;
+
+    for (let i = groundChunks.length - 1; i >= 0; i--) {
+      if (groundChunks[i].group.position.z > CHUNK_LENGTH) { scene.remove(groundChunks[i].group); groundChunks.splice(i, 1); }
+    }
+    const zs = groundChunks.map(c => c.group.position.z);
+    const furthestZ = zs.length ? Math.min.apply(null, zs) : 0;
+    if (furthestZ > -VIEW_DISTANCE) createGroundChunk(furthestZ - CHUNK_LENGTH);
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      if (obstacles[i] === currentTrainObs) continue;
+      if (obstacles[i].group.position.z > 20) { scene.remove(obstacles[i].group); obstacles.splice(i, 1); }
+    }
+    for (let i = coinObjects.length - 1; i >= 0; i--) {
+      if (coinObjects[i].mesh.position.z > 15 || coinObjects[i].collected) {
+        if (!coinObjects[i].collected) scene.remove(coinObjects[i].mesh);
+        coinObjects.splice(i, 1);
+      }
+    }
+    for (let i = powerupObjects.length - 1; i >= 0; i--) {
+      if (powerupObjects[i].group.position.z > 15 || powerupObjects[i].collected) {
+        if (!powerupObjects[i].collected) scene.remove(powerupObjects[i].group);
+        powerupObjects.splice(i, 1);
+      }
+    }
+
+    const obsZs = obstacles.map(o => o.group.position.z);
+    const furthestObsZ = obsZs.length ? Math.min.apply(null, obsZs) : 0;
+    if (furthestObsZ > -VIEW_DISTANCE + 30) {
+      const interval = Math.max(OBSTACLE_INTERVAL_MIN, OBSTACLE_INTERVAL_INITIAL - distance * 0.0003);
+      spawnObstacleGroupAt(furthestObsZ - (8 + Math.random() * 12) * interval / OBSTACLE_INTERVAL_INITIAL);
+    }
+    const coinZs = coinObjects.filter(c => !c.collected).map(c => c.mesh.position.z);
+    const furthestCoinZ = coinZs.length ? Math.min.apply(null, coinZs) : 0;
+    if (furthestCoinZ > -VIEW_DISTANCE + 20) spawnCoinLine(Math.floor(Math.random() * 3), furthestCoinZ - (5 + Math.random() * 8));
+    const pwZs = powerupObjects.filter(p => !p.collected).map(p => p.group.position.z);
+    const furthestPwZ = pwZs.length ? Math.min.apply(null, pwZs) : 0;
+    if (furthestPwZ > -VIEW_DISTANCE + 40) spawnPowerup(Math.floor(Math.random() * 3), furthestPwZ - (28 + Math.random() * 26));
+
+    animatePlayer(dt);
+    checkCollisions(dt);
+    updateTrainRide(dt);
+    updateInspectorChase(dt);
+    updateMissions();
+    updateWeather(dt);
+    applyCycleAndWeather();
+
+    if (flightTimer > 0) { flightTimer -= dt; if (flightTimer <= 0) { isFlying = false; isJumping = true; playerVelY = 0; } }
+    powerupTimers.magnet = Math.max(0, powerupTimers.magnet - dt);
+    powerupTimers.coinx2 = Math.max(0, powerupTimers.coinx2 - dt);
+    powerupTimers.sneakers = Math.max(0, powerupTimers.sneakers - dt);
+    updatePowerupHUD();
+
+    comboIdleTimer += dt;
+    if (comboIdleTimer > 3 && comboPoints > 0) {
+      comboPoints = Math.max(0, comboPoints - dt * 4);
+      comboLevel = Math.max(1, Math.floor(comboPoints / 10) + 1);
+    }
+
+    if (invincibleTimer > 0) invincibleTimer -= dt;
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.vel.y += GRAVITY * 0.5 * dt;
+      p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+      p.life -= dt;
+      p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
+      if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+    }
+
+    const landingDip = landingSquashTimer > 0 ? landingSquashTimer * 0.6 : 0;
+    const camTarget = new THREE.Vector3(
+      player.position.x * 0.5,
+      player.position.y + cameraOffset.y + (isJumping || isFlying ? playerY * 0.25 : 0) - landingDip,
+      player.position.z + cameraOffset.z
+    );
+    camera.position.lerp(camTarget, 5 * dt);
+    const lookAt = new THREE.Vector3(player.position.x * 0.6, player.position.y + cameraLookOffset.y, player.position.z + cameraLookOffset.z);
+    camera.lookAt(lookAt);
+
+    if (shakeIntensity > 0) {
+      camera.position.x += (Math.random() - 0.5) * shakeIntensity;
+      camera.position.y += (Math.random() - 0.5) * shakeIntensity * 0.6;
+      shakeIntensity *= 0.88;
+      if (shakeIntensity < 0.01) shakeIntensity = 0;
+    }
+
+    sunLight.position.x = player.position.x + 30;
+    sunLight.target.position.copy(player.position);
+
+    document.getElementById('coin-count').textContent = coins;
+    document.getElementById('distance').textContent = Math.floor(distance);
+    const comboProgress = (comboPoints % 10) / 10;
+    document.getElementById('multiplier-fill').style.width = (comboProgress * 100) + '%';
+    document.getElementById('multiplier-text').textContent = 'x' + comboLevel;
+
+    player.visible = invincibleTimer > 0 ? Math.floor(invincibleTimer * 10) % 2 === 0 : true;
+
+    renderer.render(scene, camera);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // GAME LOOP
+  // ══════════════════════════════════════════════════════════════
+  function gameLoop(time) {
+    requestAnimationFrame(gameLoop);
+    const dt = Math.min((time - lastTime) / 1000, 0.05);
+    lastTime = time;
+    update(dt);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // START / RESTART
+  // ══════════════════════════════════════════════════════════════
+  function startGame() {
+    initAudio();
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('shop-screen').style.display = 'none';
+    document.getElementById('game-over').style.display = 'none';
+    document.getElementById('pause-screen').style.display = 'none';
+
+    const character = CHARACTERS[selectedCharacter];
+    const hoverboard = HOVERBOARD_TYPES[HB_KEYS[selectedHoverboard]];
+    runSpeedMult = 1 + character.speedBonus + hoverboard.speedBonus;
+    activeCoinMult = 1 + character.coinBonus + hoverboard.coinBonus + upgrades.coinBonus * 0.1;
+    activeJumpVelocity = JUMP_VELOCITY * (1 + character.jumpBonus);
+    activeMagnetBonus = hoverboard.magnetBonus;
+    effectiveDuration.magnet = POWERUP_DURATION.magnet + upgrades.magnet * 2 + activeMagnetBonus;
+    effectiveDuration.jetpack = POWERUP_DURATION.jetpack + upgrades.jetpack * 1.5;
+    effectiveDuration.coinx2 = POWERUP_DURATION.coinx2;
+    effectiveDuration.sneakers = POWERUP_DURATION.sneakers;
+    hoverboardCharges = 1 + Math.floor(upgrades.hoverboard / 2);
+
+    gameState = 'playing';
+    coins = 0; distance = 0; speed = GROUND_SPEED_INITIAL * runSpeedMult;
+    currentLane = 1; targetX = 0; playerY = 0; playerVelY = 0;
+    isJumping = false; isSliding = false; isFlying = false; isOnTrain = false; currentTrainObs = null;
+    slideTimer = 0; flightTimer = 0;
+    invincibleTimer = 0;
+    shakeIntensity = 0;
+    tumbleTimer = 0;
+    timeScale = 1;
+    jumpsThisRun = 0; slidesThisRun = 0; powerupsThisRun = 0; coinsThisRun = 0; nearMissThisRun = 0; roofRidesThisRun = 0;
+    powerupTimers = { magnet: 0, coinx2: 0, sneakers: 0 };
+    elapsedTime = 0;
+    jetpackParticleTimer = 0;
+    comboPoints = upgrades.startCombo * 10;
+    comboLevel = Math.min(MAX_COMBO_LEVEL, Math.floor(comboPoints / 10) + 1);
+    comboIdleTimer = 0;
+    mistakeCount = 0; inspectorState = 'normal'; inspectorDistance = 14; inspectorTargetDistance = 14;
+    cameraZoomTimer = 0; landingSquashTimer = 0;
+    currentWeather = 'sunny'; weatherTimer = 20 + Math.random() * 20; lightningTimer = 5;
+    currentZone = 'normal'; zoneDistanceRemaining = 0;
+    cycleTime = Math.random() * DAY_CYCLE_LENGTH;
+    rainMesh.visible = false;
+    setTunnelEcho(false);
+
+    player.position.set(0, 0, 0);
+    player.rotation.set(0, 0, 0);
+    jetpackGroup.visible = false;
+    hoverboardMesh.visible = true;
+    camera.fov = 65;
+    camera.updateProjectionMatrix();
+
+    applyCharacter(selectedCharacter);
+    applyHoverboardVisual(selectedHoverboard);
+    generateMissions();
+    updateHoverboardHUD();
+    updateDangerMeter();
+    updatePowerupHUD();
+    updateConditionsBadge();
+    document.getElementById('vignette-flash').classList.remove('flash');
+
+    for (const obs of obstacles) scene.remove(obs.group);
+    obstacles.length = 0;
+    for (const c of coinObjects) if (!c.collected) scene.remove(c.mesh);
+    coinObjects.length = 0;
+    for (const p of powerupObjects) if (!p.collected) scene.remove(p.group);
+    powerupObjects.length = 0;
+    for (const pt of particles) scene.remove(pt.mesh);
+    particles.length = 0;
+
+    for (const ch of groundChunks) scene.remove(ch.group);
+    groundChunks.length = 0;
+    for (let i = -1; i <= 3; i++) createGroundChunk(i * CHUNK_LENGTH);
+
+    nextObstacleZ = -30; nextCoinZ = -15; nextPowerupZ = -60;
+    for (let i = 0; i < 8; i++) { spawnObstacleGroupAt(nextObstacleZ); nextObstacleZ -= 8 + Math.random() * 12; }
+    for (let i = 0; i < 6; i++) { spawnCoinLine(Math.floor(Math.random() * 3), nextCoinZ); nextCoinZ -= 5 + Math.random() * 8; }
+    spawnPowerup(Math.floor(Math.random() * 3), -55);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // SHOP
+  // ══════════════════════════════════════════════════════════════
+  function upgradeCost(key) {
+    const def = UPGRADE_DEFS[key];
+    const level = upgrades[key];
+    return Math.round(def.base * Math.pow(def.growth, level));
+  }
+  function renderShop() {
+    document.getElementById('shop-bank-val').textContent = bank;
+    const el = document.getElementById('upgrade-list');
+    let html = '';
+    for (const key in UPGRADE_DEFS) {
+      const def = UPGRADE_DEFS[key];
+      const level = upgrades[key];
+      const maxed = level >= def.max;
+      const cost = maxed ? 0 : upgradeCost(key);
+      const affordable = !maxed && bank >= cost;
+      html += '<div class="upgrade-row">' +
+        '<div class="upgrade-info"><div class="upgrade-name">' + def.name + '</div>' +
+        '<div class="upgrade-level">Level ' + level + '/' + def.max + (level > 0 ? ' · ' + def.desc(level) : '') + '</div></div>' +
+        '<button class="upgrade-buy" data-key="' + key + '" ' + (maxed || !affordable ? 'disabled' : '') + '>' +
+        (maxed ? 'MAX' : cost + ' coins') + '</button></div>';
+    }
+    el.innerHTML = html;
+    el.querySelectorAll('.upgrade-buy').forEach(btn => {
+      btn.addEventListener('click', () => buyUpgrade(btn.dataset.key));
+    });
+  }
+  function buyUpgrade(key) {
+    const def = UPGRADE_DEFS[key];
+    if (upgrades[key] >= def.max) return;
+    const cost = upgradeCost(key);
+    if (bank < cost) return;
+    bank -= cost;
+    upgrades[key]++;
+    saveProgress();
+    updateMenuStats();
+    renderShop();
+  }
+  function openShop() {
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('shop-screen').style.display = 'flex';
+    renderShop();
+  }
+  function closeShop() {
+    document.getElementById('shop-screen').style.display = 'none';
+    document.getElementById('start-screen').style.display = 'flex';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MENU PICKERS
+  // ══════════════════════════════════════════════════════════════
+  function renderCharacterPicker() {
+    const el = document.getElementById('character-options');
+    let html = '';
+    for (let i = 0; i < CHARACTERS.length; i++) {
+      const c = CHARACTERS[i];
+      html += '<div class="picker-card' + (i === selectedCharacter ? ' selected' : '') + '" data-idx="' + i + '">' +
+        '<div class="picker-swatch" style="background:#' + c.shirt.toString(16).padStart(6, '0') + '"></div>' +
+        '<div class="picker-name">' + c.name + '</div><div class="picker-desc">' + c.desc + '</div></div>';
+    }
+    el.innerHTML = html;
+    el.querySelectorAll('.picker-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedCharacter = parseInt(card.dataset.idx, 10);
+        renderCharacterPicker();
+      });
+    });
+  }
+  function renderHoverboardPicker() {
+    const el = document.getElementById('hoverboard-options');
+    let html = '';
+    for (let i = 0; i < HB_KEYS.length; i++) {
+      const h = HOVERBOARD_TYPES[HB_KEYS[i]];
+      html += '<div class="picker-card' + (i === selectedHoverboard ? ' selected' : '') + '" data-idx="' + i + '">' +
+        '<div class="picker-swatch" style="background:#' + h.color.toString(16).padStart(6, '0') + '"></div>' +
+        '<div class="picker-name">' + h.name + '</div><div class="picker-desc">' + h.desc + '</div></div>';
+    }
+    el.innerHTML = html;
+    el.querySelectorAll('.picker-card').forEach(card => {
+      card.addEventListener('click', () => {
+        selectedHoverboard = parseInt(card.dataset.idx, 10);
+        renderHoverboardPicker();
+      });
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // EVENT WIRING
+  // ══════════════════════════════════════════════════════════════
+  document.getElementById('btn-start').addEventListener('click', startGame);
+  document.getElementById('btn-restart').addEventListener('click', startGame);
+  document.getElementById('btn-resume').addEventListener('click', togglePause);
+  document.getElementById('btn-pause').addEventListener('click', togglePause);
+  document.getElementById('btn-mute').addEventListener('click', toggleMute);
+  document.getElementById('btn-shop').addEventListener('click', openShop);
+  document.getElementById('btn-shop-close').addEventListener('click', closeShop);
+  document.getElementById('btn-quit').addEventListener('click', () => {
+    gameState = 'menu';
+    document.getElementById('pause-screen').style.display = 'none';
+    document.getElementById('start-screen').style.display = 'flex';
+  });
+  document.getElementById('btn-gameover-menu').addEventListener('click', () => {
+    gameState = 'menu';
+    document.getElementById('game-over').style.display = 'none';
+    document.getElementById('start-screen').style.display = 'flex';
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // KICK OFF
+  // ══════════════════════════════════════════════════════════════
+  loadProgress();
+  applyCharacter(0);
+  applyHoverboardVisual(0);
+  hoverboardMesh.visible = true;
+  renderCharacterPicker();
+  renderHoverboardPicker();
+  updateConditionsBadge();
+  lastTime = performance.now();
+  gameLoop(lastTime);
+
+})();
+</script>
+</body>
+</html>
